@@ -3,6 +3,7 @@
 Open25-DM32 is an independent firmware research project to bring **APCO P25 Phase 1 digital voice** to the **Baofeng DM-32UV** using the radio's existing hardware. The first goal is reliable two-way conventional voice. The longer-term goal is a radio that can participate in an authorized Phase 1 trunked system, if the hardware and interoperability tests support it.
 
 [![Donate via GitHub Sponsors](https://img.shields.io/badge/Donate-GitHub%20Sponsors-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/tylerwatt12?metadata_project=open25-dm32)
+[![Donate via Ko-fi](https://img.shields.io/badge/Donate-Ko--fi-FF6433?style=for-the-badge&logo=kofi&logoColor=white)](https://ko-fi.com/kd8zmm)
 
 ## Where it stands
 
@@ -24,7 +25,7 @@ The order and scope can change as measurements come in. Replay tests, hardware a
 
 ## Support development
 
-Use the [Donate button](https://github.com/sponsors/tylerwatt12?metadata_project=open25-dm32) to direct a GitHub sponsorship to Open25-DM32. The link identifies this project on the maintainer's Sponsors profile. Donations help cover development and testing expenses. Sponsorship is optional and carries no delivery commitments.
+Support development through [Ko-fi](https://ko-fi.com/kd8zmm) or [GitHub Sponsors](https://github.com/sponsors/tylerwatt12?metadata_project=open25-dm32). The GitHub Sponsors link tags your sponsorship for Open25-DM32. Donations help cover development and testing expenses. Sponsorship is optional and carries no delivery commitments.
 
 You can also help by reviewing the modem or P25 code, contributing reproducible test cases, or sharing measurements from an authorized bench setup. Open a [GitHub issue](https://github.com/tylerwatt12/Open25-DM32/issues) with the radio and firmware revision, test setup, and what you observed. Please keep radio IDs, calibration data, and private traffic out of public reports.
 
