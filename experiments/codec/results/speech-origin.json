@@ -1,0 +1,58 @@
+{
+  "recorded_utc": "2026-10-26T16:29:55.776233+00:00",
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "origin": "Locally generated macOS /usr/bin/say output from the original test text below; configured default system voice was used and was not pinned",
+  "text": "This is a clear voice test of Project twenty five. The small portable radio must receive and transmit speech using its own microphone and speaker. Alpha bravo charlie. One two three four five. Testing conventional voice on a single channel.",
+  "conversion": "ffmpeg -i speech.aiff -ar 8000 -ac 1 -f s16le speech.s16le",
+  "license_record": "Generated local development audio, separate from GPL source. No redistribution license for the system voice/audio is asserted. Files stay in ignored local out/; deterministic mathematical synthetic input is the redistributable primary regression input.",
+  "quality_limit": "No formal perceptual speech-quality score, listening-panel result, microphone capture, speaker test, or radio/RF interoperability measurement was performed.",
+  "files": {
+    "experiments/codec/out/release/speech.input.wav": {
+      "sha256": "d949a7f7a2b4315d93b3dba1de607f1832dcb77500627681e38e3d2410b19645",
+      "bytes": 224044,
+      "sample_rate": 8000,
+      "channels": 1,
+      "duration_seconds": 14.0
+    },
+    "experiments/codec/out/release/speech.fixed.wav": {
+      "sha256": "be016268a7556d5e68196d8bf31c9491d3d3db8650df42f9156f74b72d88c755",
+      "bytes": 224044,
+      "sample_rate": 8000,
+      "channels": 1,
+      "duration_seconds": 14.0
+    },
+    "experiments/codec/out/release/speech.mbelib.wav": {
+      "sha256": "50e3e96b1cbcc2d9b31daec70511102a44ca04e74bd8cf204a0e18e17ed777b4",
+      "bytes": 224044,
+      "sample_rate": 8000,
+      "channels": 1,
+      "duration_seconds": 14.0
+    },
+    "experiments/codec/out/release/speech-cai.fixed.wav": {
+      "sha256": "82012d58493000f44dd32fb8f9d93dce2537c31a866e0f73aa9b9d31f444977b",
+      "bytes": 224684,
+      "sample_rate": 8000,
+      "channels": 1,
+      "duration_seconds": 14.04
+    },
+    "experiments/codec/out/release/speech-cai.mbelib.wav": {
+      "sha256": "7557cd325e5ea929187d4679728c4e5956ab7282daa2eeafe7aa02f77b8ff430",
+      "bytes": 224684,
+      "sample_rate": 8000,
+      "channels": 1,
+      "duration_seconds": 14.04
+    },
+    "experiments/codec/out/release/speech.imbe88": {
+      "sha256": "c1e4c35d9e8a5fb97fbfa77137007e987e5b3b3441085e36c0ccb1b5f6deb587",
+      "bytes": 7700
+    },
+    "experiments/codec/out/release/speech-cai.p25": {
+      "sha256": "2698e9e0814d4e7c953326d5b29342f474c4682c8bcf034762f0e9065f7c227c",
+      "bytes": 16965
+    },
+    "experiments/codec/out/release/speech-cai.dibits": {
+      "sha256": "31e55817ae1b739d02f6847822085dfabf70959f213e1b6e4303608f4c40447d",
+      "bytes": 67860
+    }
+  }
+}

@@ -1,0 +1,108 @@
+[
+  {
+    "name": "op25",
+    "original_url": "https://github.com/boatbod/op25",
+    "git_url": "https://github.com/boatbod/op25.git",
+    "commit": "3f44d43eb449bb4753247ce848bb42a403823dea",
+    "retrieved_date": "2026-10-26",
+    "local_path": "research/protocol/op25",
+    "commit_date": "2026-10-25T16:10:52-04:00",
+    "license": "Per-file: p25craft GPL-2.0-or-later; OP25 helpers GPL-3.0-or-later; ezpwd rs GPL-3.0-or-later and rs_base LGPL (test oracle only)",
+    "files": [
+      {
+        "path": "op25/gr-op25_repeater/apps/tx/p25craft.py",
+        "original_url": "https://github.com/boatbod/op25/blob/3f44d43eb449bb4753247ce848bb42a403823dea/op25/gr-op25_repeater/apps/tx/p25craft.py",
+        "bytes": 74066,
+        "sha256": "27079a321f75bda5db8d3ef6dd30d65992dbf8b6c73a2c608b43f3f745e9e2d9"
+      },
+      {
+        "path": "op25/gr-op25_repeater/lib/op25_imbe_frame.h",
+        "original_url": "https://github.com/boatbod/op25/blob/3f44d43eb449bb4753247ce848bb42a403823dea/op25/gr-op25_repeater/lib/op25_imbe_frame.h",
+        "bytes": 22173,
+        "sha256": "a33ff9f4ad9555d2a7ce0e20de445343fc03baa73b36c254eb19907b56c6d87e"
+      },
+      {
+        "path": "op25/gr-op25_repeater/lib/op25_golay.h",
+        "original_url": "https://github.com/boatbod/op25/blob/3f44d43eb449bb4753247ce848bb42a403823dea/op25/gr-op25_repeater/lib/op25_golay.h",
+        "bytes": 17389,
+        "sha256": "20594ff5971a3ff58c94da8c0eb2c252723c943f68617956c526f936b6bd40cb"
+      },
+      {
+        "path": "op25/gr-op25_repeater/lib/op25_hamming.h",
+        "original_url": "https://github.com/boatbod/op25/blob/3f44d43eb449bb4753247ce848bb42a403823dea/op25/gr-op25_repeater/lib/op25_hamming.h",
+        "bytes": 9465,
+        "sha256": "98f420948c6b64b620f1722c14c9614c6413d5886c3d45106187c85aa0b11b9c"
+      },
+      {
+        "path": "op25/gr-op25_repeater/lib/ezpwd/rs",
+        "original_url": "https://github.com/boatbod/op25/blob/3f44d43eb449bb4753247ce848bb42a403823dea/op25/gr-op25_repeater/lib/ezpwd/rs",
+        "bytes": 8507,
+        "sha256": "0961d50702d6c3ae66ff419aac985c2cb4c159e278005ba8e23e341a5869609f"
+      },
+      {
+        "path": "op25/gr-op25_repeater/lib/ezpwd/rs_base",
+        "original_url": "https://github.com/boatbod/op25/blob/3f44d43eb449bb4753247ce848bb42a403823dea/op25/gr-op25_repeater/lib/ezpwd/rs_base",
+        "bytes": 44103,
+        "sha256": "900cf9fa64ca4566556c8efb233e1aab5127856e168d3db27e9c9869e07e1bbc"
+      },
+      {
+        "path": "op25/gr-op25_repeater/lib/p25_framer.cc",
+        "original_url": "https://github.com/boatbod/op25/blob/3f44d43eb449bb4753247ce848bb42a403823dea/op25/gr-op25_repeater/lib/p25_framer.cc",
+        "bytes": 7658,
+        "sha256": "dc385ca2ec5720dc006208d0ef6021986476316e6c614171ddc7a3294eecb6d4"
+      }
+    ]
+  },
+  {
+    "name": "MMDVM",
+    "original_url": "https://github.com/g4klx/MMDVM",
+    "git_url": "https://github.com/g4klx/MMDVM.git",
+    "commit": "046e1df16105cbc33de3da7b7d6a03af402ed81d",
+    "retrieved_date": "2026-10-26",
+    "local_path": "research/protocol/MMDVM",
+    "commit_date": "2026-08-16T17:36:20+01:00",
+    "license": "GPL-2.0-or-later per P25TX.cpp header; research reference only",
+    "files": [
+      {
+        "path": "P25Defines.h",
+        "original_url": "https://github.com/g4klx/MMDVM/blob/046e1df16105cbc33de3da7b7d6a03af402ed81d/P25Defines.h",
+        "bytes": 4892,
+        "sha256": "5c9a907663c2b8fd9a369394efa7e621dc729e56d8ba4159c1099966bb5c863f"
+      },
+      {
+        "path": "P25RX.cpp",
+        "original_url": "https://github.com/g4klx/MMDVM/blob/046e1df16105cbc33de3da7b7d6a03af402ed81d/P25RX.cpp",
+        "bytes": 15548,
+        "sha256": "c406e941fe9d43c34f427bf7ac24c26ab1dece0219dfe67f85aafbae630bc44f"
+      },
+      {
+        "path": "P25TX.cpp",
+        "original_url": "https://github.com/g4klx/MMDVM/blob/046e1df16105cbc33de3da7b7d6a03af402ed81d/P25TX.cpp",
+        "bytes": 5545,
+        "sha256": "cda78f83a66efbc83334344cab8a349551ca68918f082dee9060ef90c337c280"
+      }
+    ]
+  },
+  {
+    "name": "Zetron P25 Training Guide",
+    "original_url": "https://www.zetron.com/wp-content/uploads/2023/12/TG-001-5-0-0-P25-Training-Guide_rebrand.pdf",
+    "version": "TG-001 revision 5-0-0 May 2023",
+    "retrieved_date": "2026-10-26",
+    "local_path": "research/protocol/Zetron-TG-001-5-0-0-P25-Training-Guide.pdf",
+    "bytes": 2326356,
+    "sha256": "5b9126a7d3b3d4cc8e6199b64002ddaab4265a79643c64e80ca2d8e1b7ce37e0",
+    "pages": 121,
+    "license": "Copyright 2023 Zetron, all rights reserved; local research reference, not project source"
+  },
+  {
+    "name": "Tait Introduction to P25",
+    "original_url": "https://www.taitradioacademy.com/wp-content/uploads/2016/02/TRG-00001-01-M_Intro_to_P25.pdf",
+    "version": "TRG-00001-01-M Issue 1 October 2015",
+    "retrieved_date": "2026-10-26",
+    "local_path": "research/protocol/Tait-TRG-00001-01-M-Intro-to-P25.pdf",
+    "bytes": 1975009,
+    "sha256": "9662ea4b323cad04c48bdf3de161d749d61d9a21c39c3baa719f81fd9e2326f5",
+    "pages": 104,
+    "license": "Copyright 2015 Tait Limited, all rights reserved; local research reference, not project source"
+  }
+]

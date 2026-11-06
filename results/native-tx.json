@@ -1,0 +1,169 @@
+{
+  "stage": "native hardware TX measured; conventional voice TX incomplete",
+  "date": "2026-11-06",
+  "frequency_hz": 145500000,
+  "power_index": 0,
+  "calibration_required": true,
+  "padded_application_sha256": "9cc64e8bae718fdabfbd33b0d291e1b583b1342a7aea1921b2b87c69f8c01c74",
+  "health_flags": 47,
+  "warm_update_hardware_verified": true,
+  "preinstall_firmware_reads_requested": false,
+  "budget": {
+    "flash_bytes": 431092,
+    "main_ram_bytes": 180296,
+    "main_ram_capacity_bytes": 211456,
+    "main_ram_unallocated_bytes": 31160,
+    "largest_ram_symbols": [
+      {
+        "symbol": "fb_words",
+        "bytes": 38400
+      },
+      {
+        "symbol": "ucHeap",
+        "bytes": 37376
+      },
+      {
+        "symbol": "voice",
+        "bytes": 7276
+      },
+      {
+        "symbol": "enc_state",
+        "bytes": 7168
+      },
+      {
+        "symbol": "dec_state",
+        "bytes": 6144
+      },
+      {
+        "symbol": "fifo",
+        "bytes": 5788
+      },
+      {
+        "symbol": "buffer",
+        "bytes": 4096
+      },
+      {
+        "symbol": "sm",
+        "bytes": 3284
+      },
+      {
+        "symbol": "eng",
+        "bytes": 2276
+      },
+      {
+        "symbol": "ring",
+        "bytes": 2048
+      },
+      {
+        "symbol": "txBursts",
+        "bytes": 1728
+      },
+      {
+        "symbol": "test",
+        "bytes": 1296
+      },
+      {
+        "symbol": "row_hash",
+        "bytes": 1280
+      },
+      {
+        "symbol": "reply",
+        "bytes": 1032
+      },
+      {
+        "symbol": "fault_stack",
+        "bytes": 1024
+      },
+      {
+        "symbol": "rx_buf",
+        "bytes": 1024
+      },
+      {
+        "symbol": "spk_q",
+        "bytes": 960
+      },
+      {
+        "symbol": "sector.3",
+        "bytes": 848
+      },
+      {
+        "symbol": "ui_st",
+        "bytes": 824
+      },
+      {
+        "symbol": "s",
+        "bytes": 784
+      }
+    ]
+  },
+  "python_tests_passed": 100,
+  "host_guards": [
+    "ASan/UBSan actual GPIO/DAC/FD6818/storage paths",
+    "native board calibration/timer/power admission",
+    "ownership/PTT/battery/late-callback exclusions",
+    "exact observed interrupt-phase regression",
+    "100000 adversarial native-controller events"
+  ],
+  "target_checks": [
+    "zero warnings",
+    "static stacks",
+    "identical forced rebuild",
+    "RX-only and feature-off regressions"
+  ],
+  "completed_short_runs": [
+    {
+      "blocks": 4,
+      "pa_keys": 1,
+      "faults": 0,
+      "capture_duration_ms": 78,
+      "frequency_median_hz": 602.1656,
+      "max_boundary_gap_us": 30084
+    },
+    {
+      "blocks": 7,
+      "pa_keys": 1,
+      "faults": 0,
+      "capture_duration_ms": 166,
+      "max_boundary_gap_us": 30088
+    }
+  ],
+  "approximate_level_offsets_hz": {
+    "dibit00": 602,
+    "dibit01": 1878,
+    "dibit10": -709,
+    "dibit11": -2027
+  },
+  "iq_clipped_components": 0,
+  "frequency_measurement_is_traceable_calibration": false,
+  "streaming_attempt": {
+    "declared_blocks": 24,
+    "loaded_blocks": 8,
+    "sent_blocks": 8,
+    "fault": "underrun",
+    "cleanup_confirmed": true,
+    "automatic_retry": false
+  },
+  "transport_observation": "An instrumented short run completed but a native heartbeat reply timed out during RF; idle round trips approximately 5 ms. Root cause unresolved.",
+  "radio_uart_errors": {
+    "overruns": 0,
+    "line_errors": 0,
+    "tx_stalls": 0
+  },
+  "radio_parser_errors": {
+    "bad_crc": 0,
+    "too_long": 0,
+    "timeouts": 0
+  },
+  "unhandled_irqs": 0,
+  "rf_voice_interoperability_verified": false,
+  "sustained_byte_exact_tx_verified": false,
+  "remaining": [
+    "hardware level/center and shaping characterization",
+    "reliable heartbeat and queue refill during RF",
+    "independent P25 CAI and voice decode"
+  ],
+  "end_state": {
+    "radio": "idle, native ownership released",
+    "vce": "test channel running, Baseband I/Q off"
+  }
+}

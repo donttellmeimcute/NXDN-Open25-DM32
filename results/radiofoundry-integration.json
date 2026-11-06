@@ -1,0 +1,132 @@
+{
+  "date": "2026-11-05",
+  "scope": "Conventional clear Phase 1 software integration; no operational P25 RF mode",
+  "hardware_verified": false,
+  "radio_connected": false,
+  "flashed": false,
+  "trunk_tracking_implemented": false,
+  "upstream_commit": "dfbaf20c400c73e2ccf6edb80af7d1d255bee418",
+  "freertos_commit": "3a22924e0a9ddbbc8b0758881c33b3422a5cc20d",
+  "target": {
+    "cpu": "CK803S",
+    "clock_config_hz": 168000000,
+    "clock_measured": false,
+    "application_flash_bytes": 426536,
+    "application_ram_bytes": 177200,
+    "application_ram_region_bytes": 211456,
+    "application_ram_region_free_bytes": 34256,
+    "voice_context_bytes": 9312,
+    "p25_worker_stack_bytes": 8192,
+    "p25_worker_static_deepest_bytes": 5292,
+    "stack_port_overhead_bytes": 68,
+    "stack_safety_margin_bytes": 128,
+    "p25_worker_static_remaining_after_allowances": 2704,
+    "static_library_estimates_not_measured": true,
+    "on_device_runtime_us": null,
+    "on_device_stack_or_heap_measured": false
+  },
+  "checks": {
+    "firmware_p25_on": "pass; zero compiler warnings",
+    "firmware_p25_off": "pass; zero compiler warnings",
+    "static_stack_all_tasks": "pass, with documented library estimates",
+    "forced_rebuild_application_identical": true,
+    "unresolved_symbols": [],
+    "high_register_instructions": 0,
+    "compiler_warnings": 0,
+    "host_guard_and_waveform_unittests": 31,
+    "native_modem_experiment_unittests": 17,
+    "independent_cai_and_error_fuzz_regression": "pass; logs/integration-regression.log",
+    "conventional_voice_sanitizers": "ASan and UBSan pass with real codec and independent metadata fixtures",
+    "waveform_oracle": "3 tests pass; selected frequency response, analytic calibration amplitude and measurement error reporting",
+    "pristine_radiofoundry_checkout": "unchanged"
+  },
+  "voice_test_scenarios": [
+    "short PTT and silent padding",
+    "paced 47-frame call and alternating LDUs",
+    "empty PTT cancellation",
+    "underrun abort",
+    "queue overflow abort",
+    "NAC/TG filtering and All Call",
+    "F7E wildcard",
+    "late entry waits for ESYNC",
+    "encrypted ESYNC cannot be overridden by LC",
+    "unsupported MFID muted",
+    "damaged metadata clears admission",
+    "retune/loss clears admission",
+    "NAC wildcard does not inherit another network",
+    "stale RX cannot reset TX codec",
+    "all 288 one-hot bits in three PHY layouts",
+    "in-place RX permutation",
+    "record gap and sequence wrap",
+    "unsupported RC layout rejected"
+  ],
+  "host_selftest": {
+    "air_bytes": 549,
+    "pcm_blocks": 18,
+    "pcm_crc32": "4e158373",
+    "nonzero_samples": 2715,
+    "host_voice_object_bytes": 9328
+  },
+  "codec_regression": {
+    "platform": "host-only; no CK803S or RF timing claim",
+    "frames": 2000,
+    "upstream_pack_matches": 2000,
+    "mbelib_harmonic_and_band_matches": 2000,
+    "mbelib_voicing_matches": 2000,
+    "random_payload_checks": {
+      "decoded": 8105,
+      "reserved_muted": 1895,
+      "arithmetic_faults_muted": 0
+    },
+    "heap_in_codec_path": false,
+    "rf_or_radio_validation": false
+  },
+  "outputs": {
+    "build/radiofoundry-p25/build/dm32-p25-lab/rfoundry_dm32.elf": "78b2fa32a566b2d2b27aa67d4c3a6fd8609fded5b760c03af1a4d01c99cc0f55",
+    "build/radiofoundry-p25/build/dm32-p25-lab/rfoundry_dm32.bin": "04a8eedb73dfb11530286bf4bedcbb7bb2184fe10fc16b7814097b0b472d1f23",
+    "build/radiofoundry-p25/build/dm32-p25-lab/rfoundry_dm32.map": "7b2eedd95c3ee3c2c33c411afaf3aa044f338461dd809c774dc607ef4dcbf315",
+    "build/radiofoundry-p25/build/dm32-p25-lab/rfoundry_dm32.codec.bin": "8aacd0d2cf170503697a9cc127d37029b5b215a05c566598f89ea6c1cc4163c6"
+  },
+  "local_stock_merge": {
+    "profile": "DM32.01.01.049.bin",
+    "stock_sha256": "03107b6f600e7fa95105af8324cff349c0f17fe30db249c14d11e79baa8da97a",
+    "output_bytes": 996868,
+    "redistribution": "not included in tracked sources"
+  },
+  "logs_sha256": {
+    "logs/voice-tests.log": "2d5d71392533c60a25cfdfef0a7bdf85c4f6c1d4d61264dcbf3b5c5e0ba5186b",
+    "logs/integration-regression.log": "12c9e277685b31360d9bbfb41e65814e772f3726ecf1c97686548fe39a20a6b4",
+    "logs/radiofoundry-p25-lab.log": "ffcd12bcc6d078fc28f6cde255d5d605a9ecb901151cb3be88d63ceace54e351",
+    "logs/radiofoundry-p25-off.log": "a1ca34fcf0fac270269956314bf5ce20fb9603feea7f6cf21773292df460d00b",
+    "logs/radiofoundry-stack-lab.log": "d5e26a9e4e8e0dc56bef6453866abae72b083617b630a0201bbf18f1d830c176",
+    "logs/radiofoundry-rebuild-lab.log": "8850391fa8a7857fcf1edbf6d7a7b21c737c1b446c172c33d5761be970c1a359",
+    "logs/radiofoundry-codec-regression.json": "612f28c443609b656ce3296b3953f6b9e0825d59b7f031dd85baa52c9539268f"
+  },
+  "external_lead": {
+    "url": "https://x.com/ElectronicsbyJH/status/2115986338017157406",
+    "author": "KD8TUO / ElectronicsbyJH",
+    "posted": "2026-10-29",
+    "observed": "2026-11-05",
+    "method": "Full public thread and author replies inspected through existing Chrome session on 2026-11-05; no messages sent",
+    "evidence": "Author explicitly rules out factory firmware and attributes the still-in-development build to his radio club; no project name, source URL, license or modem implementation identified",
+    "identified_firmware": "unnamed non-factory club development build",
+    "public_source_located": false,
+    "hardware_p25_modem_confirmed": false,
+    "source_urls": [
+      "https://x.com/ElectronicsbyJH/status/2116258946898112854",
+      "https://x.com/ElectronicsbyJH/status/2116257753140175290",
+      "https://x.com/ElectronicsbyJH/status/2116327277529358617",
+      "https://x.com/907tothe703/status/2116674426196615334"
+    ],
+    "notes": "docs/conventional.md#external-implementation-lead"
+  },
+  "remaining": [
+    "backups and recovery of the actual radio",
+    "native RX bit continuity and framing independent capture",
+    "native TX P25 shaping/deviation and bit continuity",
+    "real-time CPU/stack/heap profiling",
+    "bind live mic/speaker, radio core and PTT/fault supervision",
+    "standalone conventional RF voice interoperability",
+    "passive trunk tracking next"
+  ]
+}

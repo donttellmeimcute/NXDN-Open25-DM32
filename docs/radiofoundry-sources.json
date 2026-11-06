@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-05",
+  "url": "https://github.com/RadioFoundry/RadioFoundry",
+  "commit": "dfbaf20c400c73e2ccf6edb80af7d1d255bee418",
+  "commit_date": "2026-11-05T13:28:18-06:00",
+  "license": "MIT; original checkout unchanged; no integration/upstream contribution made",
+  "files": {
+    "boards/dm32/radio_dm32.c": "4307e9f054e6fb604d9ce346d2a3c1ae2349199536e4bea8f24a9d5111ce1227",
+    "boards/dm32/memory.ld": "5173bcd32ca07acd76e0c3af6d5be73a15fe9b717eb46ee0bf4c9b3f70af6d4c",
+    "platform/hrc7000/audio_pcm.c": "ec32588daae98c170b324c2db18fbfb759d5caa6c42f9450d3d540300769bab7",
+    "platform/hrc7000/fm_rx_audio.c": "088c71160e0c7f5d9f455fe836fa1f4ed966f458b1dd890cc461c98cb5056c27",
+    "platform/hrc7000/hrc_afsk.c": "8520e173c3b7e23779bdea729f1bc3055ccce5f6719153373ba802eff0960e66",
+    "platform/hrc7000/platform.mk": "a533b1724e91f860dfb12bff66c2922cfbc82b406f76e674c42b66678f165577",
+    "platform/hrc7000/vocoder.c": "19bf634ea23874ac0731b51f1f5ea1ea1fdc0eb5c8e89f6e1ec689cfaa625ae5",
+    "docs/spec/modem-hrc7000.md": "25e78c18ade7dbc2ffad7f7eedfd92975ba614c2a3f5ff8cc8c5ac97bc698b9f",
+    "docs/spec/debuglink.md": "4400e668681bbe80315551e1e697ae8d75e944c35d5effdd872450f0ff115e59",
+    "docs/spec/stub-entry.md": "8a1fe8a625c1f656e2fd3b509528b601a2b1ba57b132fcbce023dfd62e41be2a"
+  },
+  "tia_documents": [
+    {
+      "id": "p25_d1460d9ae0713992",
+      "standard_id": "TIA-102.BAAA-B",
+      "pdf_path": "documents/tia-library/8.15_TIA-102.BAAA-B_Final Published Document_2017_06_22.pdf",
+      "sha256": "d1460d9ae07139928ba969d17a9db33823a758a4aa0dc52ee541a5ed49c89469"
+    },
+    {
+      "id": "p25_89a3b878eee70a14",
+      "standard_id": "TIA-102.AABC-E",
+      "pdf_path": "documents/tia-library/8.10_TIA-102-AABC-E_Final Published Document_2019_04_231.pdf",
+      "sha256": "89a3b878eee70a1414bebc18b214dba4e1bb5b18e4c7efd5c1e58ee5b195b45d"
+    },
+    {
+      "id": "p25_a48ebc16b125fb93",
+      "standard_id": "TIA-102.AABD-B",
+      "pdf_path": "documents/tia-library/8 10 TIA 102 AABD B Final Published Document 2014 11 05.pdf",
+      "sha256": "a48ebc16b125fb932dd4ec86a847d6c0d3f8c71c2a0e9036061eb30bd743bed3"
+    }
+  ]
+}

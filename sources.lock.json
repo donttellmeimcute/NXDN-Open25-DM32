@@ -1,0 +1,155 @@
+{
+  "schema": 1,
+  "retrieved_date": "2026-10-26",
+  "repositories": [
+    {
+      "path": "research/upstream/dm32-info",
+      "url": "https://github.com/Chicago-Offline/dm32-info.git",
+      "commit": "44bd45b7ec61b0adabdf8b37b0808606f2ee85b9",
+      "commit_date": "2026-10-17T08:02:29-05:00",
+      "tree": "ee6cf1ec01ff0fe0b9d31d9e336e533e851ce6c9",
+      "git_archive_sha256": "e899b37d575a394cbfe6e196523f1cf0bfdb143ff49b0eca5dd2d32fbdac6888",
+      "license_files": [],
+      "license_note": "No root license file found; inspect per-file notices / docs/licenses.md"
+    },
+    {
+      "path": "research/upstream/firmware-archive",
+      "url": "https://github.com/M7OCM/DM-32UV.git",
+      "commit": "d1d0af59a8ec6c7d305f82dbbab851045f8fd8e6",
+      "commit_date": "2025-12-18T16:16:20Z",
+      "tree": "0acff0b7358982e3953a243561f463226d92ba9d",
+      "git_archive_sha256": "365ad49b0be58fdb6dc59b5211a6ad349338e90a51b76876fba6eee1030b7bc5",
+      "license_files": [],
+      "license_note": "No root license file found; inspect per-file notices / docs/licenses.md"
+    },
+    {
+      "path": "research/upstream/ghidra_csky",
+      "url": "https://github.com/leommxj/ghidra_csky.git",
+      "commit": "b4871e7f1c3b2e39f73b44dc4316f9a3bb3b0ba6",
+      "commit_date": "2026-07-08T20:47:37+08:00",
+      "tree": "d65da20126da4f54ab7026475661d9e97df93ab0",
+      "git_archive_sha256": "0630a7578f26b07150be01ecb3aa4fdb7801fb96ac719c91893e3c8bb1350852",
+      "license_files": [],
+      "license_note": "No root license file found; inspect per-file notices / docs/licenses.md"
+    },
+    {
+      "path": "research/upstream/gzalo",
+      "url": "https://github.com/gzalo/dm32-uv.git",
+      "commit": "3917faa86710904e826b66949981efc3c445b287",
+      "commit_date": "2026-06-24T11:15:14-03:00",
+      "tree": "35489f1b964b40681fcaf5c91365f0361ee1deec",
+      "git_archive_sha256": "eb1c8e4c3817990c09e5398319e0014ba9094f8ea0f02d274b8cd5631f511f48",
+      "license_files": [
+        "LICENSE"
+      ],
+      "license_note": "See original license files and docs/licenses.md"
+    },
+    {
+      "path": "research/upstream/roger",
+      "url": "https://github.com/rogerclarkmelbourne/DM32.git",
+      "commit": "4b2185944a85a578ae33626922b763db6256533e",
+      "commit_date": "2026-06-25T16:53:58+10:00",
+      "tree": "eaf7781b26f1e649f96059cc1a85ac28f2fbab4b",
+      "git_archive_sha256": "c951e29e71855c8c5b2e8027ac8265defc324be818a367eea66c53838a69874a",
+      "license_files": [],
+      "license_note": "No root license file found; inspect per-file notices / docs/licenses.md"
+    },
+    {
+      "path": "research/codec/imbe_vocoder",
+      "url": "https://github.com/nostar/imbe_vocoder.git",
+      "commit": "03423cb00b8e9ba1be164493e8b98b5bd7c1508c",
+      "commit_date": "2021-11-27T15:29:23-05:00",
+      "tree": "647d5e0bfa0a56d7bf51818c55fb0000a43ff800",
+      "git_archive_sha256": "a815a6a80cc9b1445fd84bb9ae9d483cf2e2b597c94824b04ff900217159483f",
+      "license_files": [],
+      "license_note": "No root license file found; inspect per-file notices / docs/licenses.md"
+    },
+    {
+      "path": "research/codec/mbelib",
+      "url": "https://github.com/szechyjs/mbelib.git",
+      "commit": "9a04ed5c78176a9965f3d43f7aa1b1f5330e771f",
+      "commit_date": "2019-05-28T21:43:53-04:00",
+      "tree": "88e099d59657ba26924b9135b20f9d9e0b7e5c51",
+      "git_archive_sha256": "01cf7640c493e18cf2c1550e27ce9e87f1c752b4aa854d07320744d36db566dd",
+      "license_files": [],
+      "license_note": "No root license file found; inspect per-file notices / docs/licenses.md"
+    },
+    {
+      "path": "research/modem/baocoder",
+      "url": "https://github.com/jasiek/baocoder.git",
+      "commit": "cef8125c7b2f3fffeecb8f2162a90d2bb0520ade",
+      "commit_date": "2026-08-30T14:36:26+02:00",
+      "tree": "b6dfae55f45b9b5536c4b4673b9414f6c557ae7f",
+      "git_archive_sha256": "a6e485c16b0e66bd461f3644fb277dc0572a21ebca73ad3af620d6b740639d48",
+      "license_files": [
+        "LICENSE"
+      ],
+      "license_note": "See original license files and docs/licenses.md"
+    },
+    {
+      "path": "research/protocol/MMDVM",
+      "url": "https://github.com/g4klx/MMDVM.git",
+      "commit": "046e1df16105cbc33de3da7b7d6a03af402ed81d",
+      "commit_date": "2026-08-16T17:36:20+01:00",
+      "tree": "9d4a206dacccf9ea766edf7d62114bbb034df30d",
+      "git_archive_sha256": "79f106d80ed570d9134952ce96208af4526769ee5e1d157334c8eba278eac837",
+      "license_files": [],
+      "license_note": "No root license file found; inspect per-file notices / docs/licenses.md"
+    },
+    {
+      "path": "research/protocol/op25",
+      "url": "https://github.com/boatbod/op25.git",
+      "commit": "3f44d43eb449bb4753247ce848bb42a403823dea",
+      "commit_date": "2026-10-25T16:10:52-04:00",
+      "tree": "b12c412bc085f245d61ebbd521d44135876c53b4",
+      "git_archive_sha256": "50e34fb54444aca2667805af77c69fbd422e307dbebeb968323ae9b112e2f51d",
+      "license_files": [],
+      "license_note": "No root license file found; inspect per-file notices / docs/licenses.md"
+    }
+  ],
+  "files": [
+    {
+      "path": "research/toolchain/downloads/binutils-2.45.1.tar.xz",
+      "url": "https://ftp.gnu.org/gnu/binutils/binutils-2.45.1.tar.xz",
+      "bytes": 27962312,
+      "sha256": "5fe101e6fe9d18fdec95962d81ed670fdee5f37e3f48f0bef87bddf862513aa5"
+    },
+    {
+      "path": "research/toolchain/downloads/gcc-14.3.0.tar.xz",
+      "url": "https://ftp.gnu.org/gnu/gcc/gcc-14.3.0/gcc-14.3.0.tar.xz",
+      "bytes": 95212220,
+      "sha256": "e0dc77297625631ac8e50fa92fffefe899a4eb702592da5c32ef04e2293aca3a"
+    },
+    {
+      "path": "research/originals/DM32.01.01.049.bin",
+      "url": "https://raw.githubusercontent.com/M7OCM/DM-32UV/8efe0e504392aefbfbd84169df6f2da1d32cdd3c/DM32.01.01.049.bin",
+      "bytes": 869688,
+      "sha256": "03107b6f600e7fa95105af8324cff349c0f17fe30db249c14d11e79baa8da97a"
+    },
+    {
+      "path": "research/modem/HR_C7000_Document_2.pdf",
+      "url": "https://www.connectsystems.com/products/top/radios/CS120D/HR_C7000%20Document%202.pdf",
+      "bytes": 9913753,
+      "sha256": "d60f652e114d5103b2252be604089528775dffa263c703545d7cfed9fe490253"
+    },
+    {
+      "path": "research/protocol/Zetron-TG-001-5-0-0-P25-Training-Guide.pdf",
+      "url": "https://www.zetron.com/wp-content/uploads/2023/12/TG-001-5-0-0-P25-Training-Guide_rebrand.pdf",
+      "bytes": 2326356,
+      "sha256": "5b9126a7d3b3d4cc8e6199b64002ddaab4265a79643c64e80ca2d8e1b7ce37e0"
+    },
+    {
+      "path": "research/protocol/Tait-TRG-00001-01-M-Intro-to-P25.pdf",
+      "url": "https://www.taitradioacademy.com/wp-content/uploads/2016/02/TRG-00001-01-M_Intro_to_P25.pdf",
+      "bytes": 1975009,
+      "sha256": "9662ea4b323cad04c48bdf3de161d749d61d9a21c39c3baa719f81fd9e2326f5"
+    },
+    {
+      "path": "research/modem/DM32_component_side_annotated.jpg",
+      "url": "https://raw.githubusercontent.com/yo3hjv/Baofeng-DM32/b6c9703934eaccfacaacc10b64944c3721c18734/DM32%20Component%20side%20adnotated.jpg",
+      "bytes": 1579777,
+      "sha256": "65907f88a4eedde604707f0e40141e41ff5e5e52a90c143a61d0caaf4f9a398f"
+    }
+  ],
+  "note": "Original public inputs, separate from generated source/patches/artifacts. Toolchain prerequisite checksums are pinned by GCC contrib/download_prerequisites and gcc/contrib/prerequisites.sha512."
+}

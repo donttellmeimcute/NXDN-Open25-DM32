@@ -1,0 +1,2 @@
+/* The fixed-point active implementation has no libm calls. Debug floating
+ * expressions are commented out. This deliberately declares no functions. */

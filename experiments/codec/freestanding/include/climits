@@ -1,0 +1,2 @@
+/* No target libc/sysroot is implied by these compiler-provided limits. */
+#include <limits.h>

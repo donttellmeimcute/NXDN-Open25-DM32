@@ -1,0 +1,598 @@
+{
+  "purpose": "Candidate read-only register snapshot before any modem experiment",
+  "status": "Documentation and exact-image static evidence only; not run on hardware",
+  "manual_sha256": "d60f652e114d5103b2252be604089528775dffa263c703545d7cfed9fe490253",
+  "image_sha256": "03107b6f600e7fa95105af8324cff349c0f17fe30db249c14d11e79baa8da97a",
+  "execution": {
+    "load_store_width": "Registers below use aligned 32-bit reads; codec configuration and RAM require byte access separately",
+    "state": "Existing application running in RX, PA unkeyed; snapshot in bounded RAM buffer and export after capture",
+    "do_not_poll_or_clear": [
+      "0x110003a0",
+      "0x110003b0",
+      "UART RBR",
+      "timer EOI",
+      "interrupt-controller acknowledge"
+    ],
+    "caveat": "A snapshot does not establish real-time sample access, RF routing, or race-free buffer ownership"
+  },
+  "registers": [
+    {
+      "address": "0x11000004",
+      "name": "PLL_reconfiguration_status",
+      "manual_pages": [
+        60,
+        61
+      ],
+      "decode_requires_revision_check": true
+    },
+    {
+      "address": "0x11000008",
+      "name": "APLL_divider",
+      "manual_pages": [
+        60,
+        61
+      ],
+      "decode_requires_revision_check": true
+    },
+    {
+      "address": "0x1100000c",
+      "name": "APLL_fraction",
+      "manual_pages": [
+        60,
+        62
+      ],
+      "decode_requires_revision_check": true
+    },
+    {
+      "address": "0x11000010",
+      "name": "BPLL_divider",
+      "manual_pages": [
+        60,
+        62
+      ],
+      "decode_requires_revision_check": true
+    },
+    {
+      "address": "0x11000014",
+      "name": "BPLL_fraction",
+      "manual_pages": [
+        60,
+        63
+      ],
+      "decode_requires_revision_check": true
+    },
+    {
+      "address": "0x11000018",
+      "name": "baseband_dividers",
+      "manual_pages": [
+        60,
+        63
+      ],
+      "decode_requires_revision_check": true
+    },
+    {
+      "address": "0x1100001c",
+      "name": "FM_sample_dividers",
+      "manual_pages": [
+        60,
+        63
+      ],
+      "decode_requires_revision_check": true
+    },
+    {
+      "address": "0x11000020",
+      "name": "codec_clock_dividers",
+      "manual_pages": [
+        60,
+        63
+      ],
+      "decode_requires_revision_check": true
+    },
+    {
+      "address": "0x11000024",
+      "name": "bus_dividers",
+      "manual_pages": [
+        60,
+        64
+      ],
+      "decode_requires_revision_check": true
+    },
+    {
+      "address": "0x11000028",
+      "name": "SDIO_USB_dividers",
+      "manual_pages": [
+        60,
+        64
+      ],
+      "decode_requires_revision_check": true
+    },
+    {
+      "address": "0x1100002c",
+      "name": "clock_gates",
+      "manual_pages": [
+        60,
+        65
+      ],
+      "decode_requires_revision_check": true
+    },
+    {
+      "address": "0x11000070",
+      "name": "DAC_CONTROL",
+      "manual_pages": [
+        95
+      ]
+    },
+    {
+      "address": "0x11000074",
+      "name": "ADC_CONTROL",
+      "manual_pages": [
+        95,
+        96
+      ]
+    },
+    {
+      "address": "0x11000080",
+      "name": "AUDIO_CONTROL",
+      "manual_pages": [
+        96,
+        97
+      ]
+    },
+    {
+      "address": "0x11000088",
+      "name": "LINEOUT_CTRL",
+      "manual_pages": [
+        97
+      ]
+    },
+    {
+      "address": "0x1100008c",
+      "name": "CODEC_I2C_MUX",
+      "manual_pages": [
+        97
+      ]
+    },
+    {
+      "address": "0x11000100",
+      "name": "WORK_MODE",
+      "manual_pages": [
+        279,
+        280
+      ]
+    },
+    {
+      "address": "0x11000104",
+      "name": "RF_MODE",
+      "manual_pages": [
+        280,
+        281
+      ]
+    },
+    {
+      "address": "0x11000108",
+      "name": "SIG_CENTER",
+      "manual_pages": [
+        281
+      ]
+    },
+    {
+      "address": "0x1100010c",
+      "name": "TX_IF_FREQ",
+      "manual_pages": [
+        281
+      ]
+    },
+    {
+      "address": "0x11000110",
+      "name": "RF_CONTROL",
+      "manual_pages": [
+        282
+      ]
+    },
+    {
+      "address": "0x11000114",
+      "name": "RF_MOD_BIAS_CTRL",
+      "manual_pages": [
+        282
+      ]
+    },
+    {
+      "address": "0x11000118",
+      "name": "DEV_LIMITER",
+      "manual_pages": [
+        282
+      ]
+    },
+    {
+      "address": "0x1100011c",
+      "name": "RSSI_BIAS_VALUE",
+      "manual_pages": [
+        282
+      ]
+    },
+    {
+      "address": "0x11000120",
+      "name": "THRESHOLD_VALUE",
+      "manual_pages": [
+        283
+      ]
+    },
+    {
+      "address": "0x11000128",
+      "name": "PHASE_OUT",
+      "manual_pages": [
+        283
+      ]
+    },
+    {
+      "address": "0x1100013c",
+      "name": "RECV_MS_SYNC_H",
+      "manual_pages": [
+        284
+      ]
+    },
+    {
+      "address": "0x11000140",
+      "name": "RECV_MS_SYNC_L",
+      "manual_pages": [
+        284
+      ]
+    },
+    {
+      "address": "0x11000144",
+      "name": "RECV_BS_SYNC_H",
+      "manual_pages": [
+        285
+      ]
+    },
+    {
+      "address": "0x11000148",
+      "name": "RECV_BS_SYNC_L",
+      "manual_pages": [
+        285
+      ]
+    },
+    {
+      "address": "0x1100014c",
+      "name": "RECV_TDMA1_SYNC_H",
+      "manual_pages": [
+        285
+      ]
+    },
+    {
+      "address": "0x11000150",
+      "name": "RECV_TDMA1_SYNC_L",
+      "manual_pages": [
+        285
+      ]
+    },
+    {
+      "address": "0x11000154",
+      "name": "RECV_TDMA2_SYNC_H",
+      "manual_pages": [
+        285,
+        286
+      ]
+    },
+    {
+      "address": "0x11000158",
+      "name": "RECV_TDMA2_SYNC_L",
+      "manual_pages": [
+        286
+      ]
+    },
+    {
+      "address": "0x11000164",
+      "name": "RECV_INFO_COUNT",
+      "manual_pages": [
+        286,
+        287
+      ]
+    },
+    {
+      "address": "0x110001b0",
+      "name": "RX_IF_FREQ",
+      "manual_pages": [
+        291
+      ]
+    },
+    {
+      "address": "0x110001b4",
+      "name": "RF_RECV_DELAY",
+      "manual_pages": [
+        291
+      ]
+    },
+    {
+      "address": "0x110001c0",
+      "name": "PHY_RECEIVE_STATE",
+      "manual_pages": [
+        292
+      ]
+    },
+    {
+      "address": "0x11000390",
+      "name": "RX_TYPE_INFO",
+      "manual_pages": [
+        302,
+        303
+      ]
+    },
+    {
+      "address": "0x11000394",
+      "name": "RX_INFO",
+      "manual_pages": [
+        303
+      ],
+      "note": "Overview table elsewhere incorrectly gives0x39c; stock code0x2c48a reads0x394"
+    },
+    {
+      "address": "0x11000398",
+      "name": "SYS_INTERP_LIST",
+      "manual_pages": [
+        100
+      ]
+    },
+    {
+      "address": "0x1100039c",
+      "name": "SYS_INTERP_MASK",
+      "manual_pages": [
+        100,
+        101
+      ],
+      "note": "For each corresponding status bit, mask value1 enables and0 disables; this does not refer to bit numbers1 and0"
+    },
+    {
+      "address": "0x11000400",
+      "name": "LAYER2_CONTROL",
+      "manual_pages": [
+        292
+      ]
+    },
+    {
+      "address": "0x11000408",
+      "name": "LAYER2_TXRX_CTRL",
+      "manual_pages": [
+        292,
+        293
+      ]
+    },
+    {
+      "address": "0x11000500",
+      "name": "FM_BANDWIDTH",
+      "manual_pages": [
+        332,
+        333
+      ]
+    },
+    {
+      "address": "0x11000504",
+      "name": "FM_DEV_COEF",
+      "manual_pages": [
+        333
+      ]
+    },
+    {
+      "address": "0x11000510",
+      "name": "FM_MOD",
+      "manual_pages": [
+        333,
+        334
+      ]
+    },
+    {
+      "address": "0x11000560",
+      "name": "FM_PTT",
+      "manual_pages": [
+        338
+      ]
+    },
+    {
+      "address": "0x1100056c",
+      "name": "FM_ADDR_SW",
+      "manual_pages": [
+        339
+      ]
+    },
+    {
+      "address": "0x140f000c",
+      "name": "DAC_DATA_B",
+      "manual_pages": [
+        243
+      ],
+      "note": "Observe only; do not call stock RFIC/GPIO write routines during this snapshot"
+    },
+    {
+      "address": "0x14100000",
+      "name": "GPIOB_SWPORTA_DR",
+      "manual_pages": [
+        219
+      ],
+      "note": "Observe only; do not call stock RFIC/GPIO write routines during this snapshot"
+    },
+    {
+      "address": "0x14100004",
+      "name": "GPIOB_SWPORTA_DDR",
+      "manual_pages": [
+        219
+      ],
+      "note": "Observe only; do not call stock RFIC/GPIO write routines during this snapshot"
+    },
+    {
+      "address": "0x14100050",
+      "name": "GPIOB_EXT_PORTA",
+      "manual_pages": [
+        220
+      ],
+      "note": "Observe only; do not call stock RFIC/GPIO write routines during this snapshot"
+    }
+  ],
+  "ranges": [
+    {
+      "start": "0x1100016c",
+      "end_exclusive": "0x110001b0",
+      "width": 4,
+      "name": "RECVFIR_COEF1..17",
+      "manual_pages": [
+        287,
+        288,
+        289,
+        290
+      ]
+    }
+  ],
+  "byte_registers": [
+    {
+      "address": "0x160009c8",
+      "name": "AICR_DAC",
+      "width": 1,
+      "manual_pages": [
+        253
+      ]
+    },
+    {
+      "address": "0x160009c9",
+      "name": "AICR_ADC",
+      "width": 1,
+      "manual_pages": [
+        253
+      ]
+    },
+    {
+      "address": "0x160009cb",
+      "name": "CR_MIC1",
+      "width": 1,
+      "manual_pages": [
+        253
+      ]
+    },
+    {
+      "address": "0x160009cc",
+      "name": "CR_MIC2",
+      "width": 1,
+      "manual_pages": [
+        253
+      ]
+    },
+    {
+      "address": "0x160009cd",
+      "name": "CR_DAC",
+      "width": 1,
+      "manual_pages": [
+        253
+      ]
+    },
+    {
+      "address": "0x160009cf",
+      "name": "CR_ADC",
+      "width": 1,
+      "manual_pages": [
+        253
+      ]
+    },
+    {
+      "address": "0x160009d2",
+      "name": "CR_VIC",
+      "width": 1,
+      "manual_pages": [
+        253
+      ]
+    },
+    {
+      "address": "0x160009d3",
+      "name": "CR_CK",
+      "width": 1,
+      "manual_pages": [
+        253
+      ]
+    },
+    {
+      "address": "0x160009d4",
+      "name": "FCR_DAC",
+      "width": 1,
+      "manual_pages": [
+        253
+      ]
+    },
+    {
+      "address": "0x160009d7",
+      "name": "FCR_ADC",
+      "width": 1,
+      "manual_pages": [
+        253
+      ]
+    },
+    {
+      "address": "0x160009df",
+      "name": "GCR_DACL",
+      "width": 1,
+      "manual_pages": [
+        253
+      ]
+    },
+    {
+      "address": "0x160009e3",
+      "name": "GCR_MIC1",
+      "width": 1,
+      "manual_pages": [
+        253
+      ]
+    },
+    {
+      "address": "0x160009e5",
+      "name": "GCR_ADCL",
+      "width": 1,
+      "manual_pages": [
+        253
+      ]
+    }
+  ],
+  "stock_ram_candidates": [
+    {
+      "address": "0x38468",
+      "width": 4,
+      "name": "TX_tuning_word"
+    },
+    {
+      "address": "0x3846c",
+      "width": 4,
+      "name": "RX_tuning_word"
+    },
+    {
+      "address": "0x38498",
+      "width": 1,
+      "name": "calibrated_DAC_ramp_target"
+    },
+    {
+      "address": "0x3e31b",
+      "width": 1,
+      "name": "TX_band_bit4_RX_band_bit3"
+    },
+    {
+      "address": "0x3e1c0",
+      "width": 1,
+      "name": "TX_active_bit0"
+    },
+    {
+      "address": "0x3a608",
+      "width": 4,
+      "name": "nominal_AHB_frequency_bookkeeping"
+    },
+    {
+      "address": "0x3a60c",
+      "width": 4,
+      "name": "nominal_APB_frequency_bookkeeping"
+    },
+    {
+      "address": "0x3a610",
+      "width": 4,
+      "name": "nominal_CPU_frequency_bookkeeping"
+    },
+    {
+      "address": "0x3a614",
+      "width": 4,
+      "name": "nominal_oscillator_frequency_bookkeeping"
+    }
+  ],
+  "stock_ram_caveat": "These globals belong only to the selected049image after normal stock initialization; a standaloneROM RAMprobe does not initialize them. GPIO/DAC observations do not identify physicalPA nets."
+}

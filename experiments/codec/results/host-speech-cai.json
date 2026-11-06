@@ -1,0 +1,14 @@
+{
+  "test": "host PCM -> full IMBE encoder -> CAI HDU/LDU1/LDU2/TDU -> dibit stream -> frame decode -> fixed and independent mbelib decoders",
+  "nac": 659,
+  "source_id": 1,
+  "talkgroup": 1,
+  "speech_frames": 700,
+  "padded_imbe_frames": 702,
+  "ldus": 78,
+  "complete_stream_frames": 80,
+  "mbelib_rejected": 0,
+  "fixed_nonzero_samples": 109274,
+  "mbelib_nonzero_samples": 112166,
+  "radio_or_rf_test": false
+}

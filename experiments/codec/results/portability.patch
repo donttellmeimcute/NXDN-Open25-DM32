@@ -1,0 +1,303 @@
+--- research/codec/imbe_vocoder/basicop2.cc
++++ generated/portable-source/basicop2.cc
+@@ -1,3 +1,4 @@
++extern "C" void dm32_imbe_note_fault(void);
+ /*
+  * Project 25 IMBE Encoder/Decoder Fixed-Point implementation
+  * Developed by Pavel Yazev E-mail: pyazev@gmail.com
+@@ -315,7 +316,12 @@
+     }
+     else
+     {
+-        result = (Word32) var1 *((Word32) 1 << var2);
++        if (var2 > 15) {
++            if (var1 == 0) return 0;
++            Overflow = 1;
++            return (var1 > 0) ? MAX_16 : MIN_16;
++        }
++        result = (Word32)var1 * ((Word32)1 << var2);
+ 
+         if ((var2 > 15 && var1 != 0) || (result != (Word32) ((Word16) result)))
+         {
+@@ -948,7 +954,7 @@
+ {
+     Word32 L_var_out;
+ 
+-    L_var_out = L_var1 + L_var2;
++    L_var_out = (Word32)((UWord32)L_var1 + (UWord32)L_var2);
+ 
+     if (((L_var1 ^ L_var2) & MIN_32) == 0)
+     {
+@@ -1000,7 +1006,7 @@
+ {
+     Word32 L_var_out;
+ 
+-    L_var_out = L_var1 - L_var2;
++    L_var_out = (Word32)((UWord32)L_var1 - (UWord32)L_var2);
+ 
+     if (((L_var1 ^ L_var2) & MIN_32) != 0)
+     {
+@@ -1059,9 +1065,9 @@
+     Word32 L_test;
+     Flag carry_int = 0;
+ 
+-    L_var_out = L_var1 + L_var2 + Carry;
+-
+-    L_test = L_var1 + L_var2;
++    L_var_out = (Word32)((UWord32)L_var1 + (UWord32)L_var2 + (UWord32)Carry);
++
++    L_test = (Word32)((UWord32)L_var1 + (UWord32)L_var2);
+ 
+     if ((L_var1 > 0) && (L_var2 > 0) && (L_test < 0))
+     {
+@@ -1184,7 +1190,7 @@
+         }
+         else
+         {
+-            L_var_out = L_var1 - L_var2;
++            L_var_out = (Word32)((UWord32)L_var1 - (UWord32)L_var2);
+             if (L_var1 > 0L)
+             {
+                 Overflow = 1;
+@@ -1194,8 +1200,8 @@
+     }
+     else
+     {
+-        L_var_out = L_var1 - L_var2 - (Word32) 0X00000001L;
+-        L_test = L_var1 - L_var2;
++        L_var_out = (Word32)((UWord32)L_var1 - (UWord32)L_var2 - 1u);
++        L_test = (Word32)((UWord32)L_var1 - (UWord32)L_var2);
+ 
+         if ((L_test < 0) && (L_var1 > 0) && (L_var2 < 0))
+         {
+@@ -1692,7 +1698,7 @@
+ {
+     Word32 L_var_out;
+ 
+-    L_var_out = (Word32) var1 << 16;
++    L_var_out = (Word32)((UWord32)(Word32)var1 << 16);
+ #if (WMOPS)
+     multiCounter[currCounter].L_deposit_h++;
+ #endif
+@@ -2034,13 +2040,13 @@
+ 
+     if ((var1 > var2) || (var1 < 0) || (var2 < 0))
+     {
+-        printf ("Division Error var1=%d  var2=%d\n", var1, var2);
+-        abort(); /* exit (0); */
++        dm32_imbe_note_fault();
++        return 0;
+     }
+     if (var2 == 0)
+     {
+-        printf ("Division by 0, Fatal error \n");
+-        abort(); /* exit (0); */
++        dm32_imbe_note_fault();
++        return 0;
+     }
+     if (var1 == 0)
+     {
+--- research/codec/imbe_vocoder/imbe_vocoder_impl.h
++++ generated/portable-source/imbe_vocoder_impl.h
+@@ -62,6 +62,7 @@
+ 	Word16 pe_lpf_mem[PE_LPF_ORD];
+ 
+ 	/* member functions */
++	Word16 rand_gen(void);
+ 	void idct(Word16 *in, Word16 m_lim, Word16 i_lim, Word16 *out);
+ 	void dct(Word16 *in, Word16 m_lim, Word16 i_lim, Word16 *out);
+ 	void fft_init(void);
+--- research/codec/imbe_vocoder/rand_gen.cc
++++ generated/portable-source/rand_gen.cc
+@@ -23,8 +23,9 @@
+ 
+ #include "typedef.h"
+ #include "basic_op.h"
++#include "imbe_vocoder_impl.h"
+ 
+-static UWord32 seed = 1;
++// RNG state is the existing per-instance seed member.
+ 
+ 
+ //-----------------------------------------------------------------------------
+@@ -42,7 +43,7 @@
+ //		        Pseudo-random number in signed Q1.16 format
+ //
+ //-----------------------------------------------------------------------------
+-Word16 rand_gen(void)
++Word16 imbe_vocoder_impl::rand_gen(void)
+ {
+ 	UWord32 hi, lo;
+ 
+--- research/codec/imbe_vocoder/v_synt.cc
++++ generated/portable-source/v_synt.cc
+@@ -78,13 +78,13 @@
+ 		L_snd[i] = 0;
+ 	
+ 	// Update phases (calculated phase value correspond to bound of frame)
+-	L_tmp = (((fund_freq_prev + fund_freq) >> 7) * FRAME/2) << 7;  // It is performed integer multiplication by mod 1
++	L_tmp = (Word32)((UWord32)(((fund_freq_prev + fund_freq) >> 7) * FRAME/2) << 7);  // It is performed integer multiplication by mod 1
+ 
+ 	L_ph_acc = 0;
+ 	for(i = 0; i < NUM_HARMS_MAX; i++)
+ 	{
+ 		ph_mem_prev[i] = ph_mem[i];
+-		L_ph_acc  += L_tmp;
++		L_ph_acc = (Word32)((UWord32)L_ph_acc + (UWord32)L_tmp);
+ 		ph_mem[i] += L_ph_acc;
+ 		dph[i] = 0;
+ 	}
+@@ -100,8 +100,8 @@
+ 	L_ph_step = L_ph_step_prev = 0;
+ 	for(i = 0; i < num_harms_max; i++)
+ 	{
+-		L_ph_step      += fund_freq;
+-		L_ph_step_prev += fund_freq_prev;
++		L_ph_step = (Word32)((UWord32)L_ph_step + (UWord32)fund_freq);
++		L_ph_step_prev = (Word32)((UWord32)L_ph_step_prev + (UWord32)fund_freq_prev);
+ 
+ 
+ 		if(i > num_harms_max_4)
+@@ -124,14 +124,14 @@
+ 		if(vu_dsn[i] == 1 && vu_dsn_prev[i] == 0)  // unvoiced => voiced
+ 		{
+ 			s_ptr = (Word16 *)ws;
+-			L_ph_acc = ph_mem[i] - (((L_ph_step >> 7) * 104) << 7);
++			L_ph_acc = ph_mem[i] - ((UWord32)((L_ph_step >> 7) * 104) << 7);
+ 			for(j = 56; j <= 104; j++)
+ 			{
+ 				L_tmp = L_mult(*s_ptr++, sa[i]);
+ 				L_tmp = L_mpy_ls(L_tmp, cos_fxp(extract_h(L_ph_acc)));
+ 				L_tmp = L_shr(L_tmp, 1);
+ 				L_snd[j] = L_add(L_snd[j], L_tmp);
+-				L_ph_acc += L_ph_step;
++				L_ph_acc = (Word32)((UWord32)L_ph_acc + (UWord32)L_ph_step);
+ 			}
+ 
+ 			for(j = 105; j <= 159; j++)
+@@ -139,7 +139,7 @@
+ 				L_tmp = L_mult(sa[i], cos_fxp(extract_h(L_ph_acc)));
+ 				L_tmp = L_shr(L_tmp, 1);
+ 				L_snd[j] = L_add(L_snd[j], L_tmp);
+-				L_ph_acc += L_ph_step;
++				L_ph_acc = (Word32)((UWord32)L_ph_acc + (UWord32)L_ph_step);
+ 			}
+ 			continue;
+ 		}
+@@ -155,7 +155,7 @@
+ 				L_tmp = L_mult(sa_prev3[i], cos_fxp(extract_h(L_ph_acc)));
+ 				L_tmp = L_shr(L_tmp, 1);
+ 				L_snd[j] = L_add(L_snd[j], L_tmp);
+-				L_ph_acc += L_ph_step_prev;
++				L_ph_acc = (Word32)((UWord32)L_ph_acc + (UWord32)L_ph_step_prev);
+ 			}
+ 
+ 			for(j = 56; j <= 104; j++)
+@@ -164,7 +164,7 @@
+ 				L_tmp = L_mpy_ls(L_tmp, cos_fxp(extract_h(L_ph_acc)));
+ 				L_tmp = L_shr(L_tmp, 1);
+ 				L_snd[j] = L_add(L_snd[j], L_tmp);
+-				L_ph_acc += L_ph_step_prev;
++				L_ph_acc = (Word32)((UWord32)L_ph_acc + (UWord32)L_ph_step_prev);
+ 			}
+ 			continue;
+ 		}
+@@ -175,14 +175,14 @@
+ 			L_ph_acc_aux  = ph_mem_prev[i];
+ 
+ 			s_ptr    = (Word16 *)ws;
+-			L_ph_acc = ph_mem[i] - (((L_ph_step >> 7) * 104) << 7);
++			L_ph_acc = ph_mem[i] - ((UWord32)((L_ph_step >> 7) * 104) << 7);
+ 
+ 			for(j = 0; j <= 55; j++)
+ 			{
+ 				L_tmp = L_mult(sa_prev3[i], cos_fxp(extract_h(L_ph_acc_aux)));
+ 				L_tmp = L_shr(L_tmp, 1);
+ 				L_snd[j] = L_add(L_snd[j], L_tmp);
+-				L_ph_acc_aux += L_ph_step_prev;
++				L_ph_acc_aux = (Word32)((UWord32)L_ph_acc_aux + (UWord32)L_ph_step_prev);
+ 			}
+ 
+ 			for(j = 56; j <= 104; j++)
+@@ -197,8 +197,8 @@
+ 				L_tmp = L_shr(L_tmp, 1);
+ 				L_snd[j] = L_add(L_snd[j], L_tmp);
+ 
+-				L_ph_acc_aux += L_ph_step_prev;
+-				L_ph_acc += L_ph_step;
++				L_ph_acc_aux = (Word32)((UWord32)L_ph_acc_aux + (UWord32)L_ph_step_prev);
++				L_ph_acc = (Word32)((UWord32)L_ph_acc + (UWord32)L_ph_step);
+ 			}
+ 
+ 			for(j = 105; j <= 159; j++)
+@@ -206,7 +206,7 @@
+ 				L_tmp = L_mult(sa[i], cos_fxp(extract_h(L_ph_acc)));
+ 				L_tmp = L_shr(L_tmp, 1);
+ 				L_snd[j] = L_add(L_snd[j], L_tmp);
+-				L_ph_acc += L_ph_step;
++				L_ph_acc = (Word32)((UWord32)L_ph_acc + (UWord32)L_ph_step);
+ 			}
+ 			continue;
+ 		}
+@@ -216,7 +216,7 @@
+ 
+ 		
+ 		L_ph_step_aux = L_mpy_ls(L_shr(fund_freq - fund_freq_prev, 4 + 1), CNST_0_1_Q1_15);       // (fund_freq - fund_freq_prev)/(2*160)
+-		L_ph_step_aux = ((L_ph_step_aux >> 7) * (i + 1)) << 7;
++		L_ph_step_aux = (Word32)((UWord32)((L_ph_step_aux >> 7) * (i + 1)) << 7);
+ 
+ 		L_ph_acc = ph_mem_prev[i];
+ 
+@@ -224,15 +224,15 @@
+ 					
+ 		for(j = 0; j < 160; j++)
+ 		{
+-			L_ph_acc_aux = ((L_ph_step_aux >> 9) * j) << 9; 
+-			L_ph_acc_aux = ((L_ph_acc_aux >> 9) * j) << 9; 
+-
+-			L_tmp = L_mpy_ls(L_amp_acc, cos_fxp(extract_h(L_ph_acc + L_ph_acc_aux)));			
++			L_ph_acc_aux = (Word32)((UWord32)((L_ph_step_aux >> 9) * j) << 9); 
++			L_ph_acc_aux = (Word32)((UWord32)((L_ph_acc_aux >> 9) * j) << 9); 
++
++			L_tmp = L_mpy_ls(L_amp_acc, cos_fxp(extract_h((Word32)((UWord32)L_ph_acc + (UWord32)L_ph_acc_aux))));			
+ 			L_snd[j] = L_add(L_snd[j], L_tmp);
+ 
+ 			L_amp_acc = L_add(L_amp_acc, L_amp_step);
+-			L_ph_acc += L_ph_step_prev;
+-			L_ph_acc += L_tmp1;
++			L_ph_acc = (Word32)((UWord32)L_ph_acc + (UWord32)L_ph_step_prev);
++			L_ph_acc = (Word32)((UWord32)L_ph_acc + (UWord32)L_tmp1);
+ 		}
+ 	}
+ 
+--- research/codec/imbe_vocoder/v_uv_det.cc
++++ generated/portable-source/v_uv_det.cc
+@@ -54,7 +54,7 @@
+ 
+ 
+ 
+-extern FILE *fp_in, *fp_out;
++// Unused legacy host FILE declarations removed.
+ extern int frame_cnt;
+ 
+ 
+--- research/codec/mbelib/imbe7200x4400.c
++++ generated/reference-source/imbe7200x4400.c
+@@ -439,7 +439,7 @@
+       printf ("deltal: %e ", deltal[l]);
+ #endif
+       // eq 77
+-      Sum77 = Sum77 + ((((float) 1 - deltal[l]) * prev_mp->log2Ml[intkl[l]]) + (deltal[l] * prev_mp->log2Ml[intkl[l] + 1]));
++      Sum77 = Sum77 + ((((float) 1 - deltal[l]) * prev_mp->log2Ml[intkl[l]]) + (deltal[l] * prev_mp->log2Ml[intkl[l] < prev_mp->L ? intkl[l] + 1 : prev_mp->L]));
+     }
+   Sum77 = ((rho / (float) cur_mp->L) * Sum77);
+ 
+@@ -451,7 +451,7 @@
+   for (l = 1; l <= cur_mp->L; l++)
+     {
+       c1 = (rho * ((float) 1 - deltal[l]) * prev_mp->log2Ml[intkl[l]]);
+-      c2 = (rho * deltal[l] * prev_mp->log2Ml[intkl[l] + 1]);
++      c2 = (rho * deltal[l] * prev_mp->log2Ml[intkl[l] < prev_mp->L ? intkl[l] + 1 : prev_mp->L]);
+       cur_mp->log2Ml[l] = Tl[l] + c1 + c2 - Sum77;
+       cur_mp->Ml[l] = powf (2, cur_mp->log2Ml[l]);
+ #ifdef IMBE_DEBUG

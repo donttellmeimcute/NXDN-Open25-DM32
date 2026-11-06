@@ -1,0 +1,30 @@
+{
+  "kind": "ram-diagnostic-only",
+  "hardware_verified": false,
+  "load_address": 65536,
+  "entry_address": 65536,
+  "length": 435,
+  "sha256": "d3e9f7f0c58a91c701ff8d36d24cf2ef02e946f338169ec61bc753806ed4201a",
+  "cpu": "ck803s",
+  "endianness": "little",
+  "abi": "C-SKY ABIv2",
+  "compiler": "14.3.0",
+  "flags": [
+    "-mcpu=ck803s",
+    "-mlittle-endian",
+    "-msoft-float",
+    "-Os",
+    "-ffreestanding",
+    "-fno-builtin",
+    "-fno-stack-protector",
+    "-fno-pic",
+    "-fstack-usage",
+    "-Wall",
+    "-Wextra",
+    "-Werror"
+  ],
+  "flash_writes": false,
+  "rf_writes": false,
+  "expected_output": "DM32-RAM-PROBE/1\\r\\ncrc16=000031c3\\r\\nbyte0=00000078\\r\\nwork_mode=<8 hex digits>\\r\\nDONE; power-cycle to restore normal boot\\r\\n",
+  "precondition": "Complete verified original backups first; read docs/recovery.md."
+}

@@ -1,0 +1,91 @@
+{
+  "date": "2026-11-05",
+  "scope": "Protect original unit before experimental firmware; no P25 RF test",
+  "installed_firmware_flash_string": "DM32.01.L01.048",
+  "upstream_commit": "dfbaf20c400c73e2ccf6edb80af7d1d255bee418",
+  "host_monitor_module_sha256": "4e3ad1fa0c85d89e9f4bc15c5d6f97212bbab341ac72d958bdf7d0e250124b9e",
+  "temporary_ram_monitor_sha256": "eae5b98615d67ba465061c84a5fb209a902333dc700671ce4ca69a05eb4aaee9",
+  "hardware": {
+    "startup_loader_answered": true,
+    "ram_monitor_protocol": 7,
+    "ram_monitor_footprint": {
+      "load": 65536,
+      "board": 1,
+      "flags": 0,
+      "run": 196608,
+      "image": 7784,
+      "bss_end": 224400,
+      "stack_lo": 224400,
+      "stack_top": 228496,
+      "stack_used": 156
+    },
+    "chips": {
+      "progmem": {
+        "jedec": "c84014",
+        "bytes": 1048576
+      },
+      "q128": {
+        "jedec": "ef4018",
+        "bytes": 16777216
+      }
+    },
+    "normal_stock_screen_restored_user_confirmed": true
+  },
+  "backup": {
+    "both_complete_main_flash_ranges_read_twice": true,
+    "both_pairs_identical": true,
+    "changed_sectors": 0,
+    "sector_hashes_independently_verified_on_Mac": 8704,
+    "whole_file_hashes_verified_on_Mac": true,
+    "verified_copies_on_both_computers": true,
+    "raw_codeplug_region_bytes": 819200,
+    "vendor_cps_project_export": false,
+    "separate_chip_OTP_captured": false,
+    "restoration_tested": false,
+    "private_images_and_full_hashes": "ignored unit backup folders; not distributed"
+  },
+  "software": {
+    "python": "3.13.17, signed PSF per-user installer",
+    "pyserial": "3.5, hash-pinned isolated virtual environment",
+    "Baofeng_CPS": "1.45, self-contained vendor application, desktop shortcut; not used to write radio",
+    "existing_USB_and_SDR_setup": "preserved"
+  },
+  "checks": {
+    "macOS_backup_guard_tests": 8,
+    "Windows_backup_guard_tests": 8,
+    "host_python_regression_tests": 48,
+    "launcher_exit_code_reporting": "handle-cache fix verified with a benign process; capture success independently established by files and empty reader stderr"
+  },
+  "transmitted_operation_counts": {
+    "rom_greeting": 1,
+    "ram_download": 31,
+    "ram_execute": 1,
+    "hello": 2,
+    "timer_read": 2,
+    "dm32_config": 1,
+    "jedec_read": 10,
+    "sector_read": 544,
+    "sector_crc": 544
+  },
+  "flash_write_commands_sent": 0,
+  "experimental_firmware_installed": false,
+  "RF_test_commands_sent": 0,
+  "limitations": [
+    "RAM monitor has additional write handlers blocked by host transport; no formal device-side proof",
+    "C7000 monitor source not present in pinned upstream; image is hash-pinned",
+    "full-chip reads do not constitute a tested restore procedure",
+    "separate .049-pinned RAM probe and application compatibility not validated on this .048 unit",
+    "P25 RX/TX, microphone/speaker, timing and waveform tests remain unperformed"
+  ],
+  "sources_sha256": {
+    "tools/dm32_readonly_backup.py": "f1c9b3d0dd37c5f2b74d1376481178c314c529a6bd80dea6745c226bdd606c24",
+    "tests/test_readonly_backup.py": "4fed96801f7c2c5787f549fd2df2ad5bfd7fca924c19099bc944233b7557e068"
+  },
+  "logs_sha256": {
+    "logs/readonly-backup-tests.log": "4cf1d5f6005033b9613d685a90d5b60425c0537c636ce02ec56b1f542c354f79",
+    "logs/inspiron-reader-tests-20261105.log": "0af2ddd4ec90db2af58791daff9ff9685aafaaf12341ee223377949dbef8258c",
+    "logs/backup-preflight-regression-20261105.log": "7b9cd984f46e143d1e99320f1d515eabeff7cb591dec60d9c178d5657a8f8487",
+    "logs/inspiron-verify-tools-20261105.log": "3ec83110fe8d95fb1eb5bdf388c166569ab07146c35ae3f52cb1dbcde63657eb"
+  },
+  "notes": "docs/recovery.md"
+}

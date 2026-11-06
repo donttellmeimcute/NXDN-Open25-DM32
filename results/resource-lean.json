@@ -1,0 +1,184 @@
+{
+  "candidate": {
+    "flash_bytes": 427368,
+    "main_ram_bytes": 180024,
+    "main_ram_capacity_bytes": 211456,
+    "main_ram_unallocated_bytes": 31432,
+    "largest_ram_symbols": [
+      {
+        "symbol": "fb_words",
+        "bytes": 38400
+      },
+      {
+        "symbol": "ucHeap",
+        "bytes": 37376
+      },
+      {
+        "symbol": "voice",
+        "bytes": 7276
+      },
+      {
+        "symbol": "enc_state",
+        "bytes": 7168
+      },
+      {
+        "symbol": "dec_state",
+        "bytes": 6144
+      },
+      {
+        "symbol": "fifo",
+        "bytes": 5788
+      },
+      {
+        "symbol": "buffer",
+        "bytes": 4096
+      },
+      {
+        "symbol": "sm",
+        "bytes": 3284
+      },
+      {
+        "symbol": "eng",
+        "bytes": 2276
+      },
+      {
+        "symbol": "ring",
+        "bytes": 2048
+      },
+      {
+        "symbol": "txBursts",
+        "bytes": 1728
+      },
+      {
+        "symbol": "test",
+        "bytes": 1296
+      },
+      {
+        "symbol": "row_hash",
+        "bytes": 1280
+      },
+      {
+        "symbol": "reply",
+        "bytes": 1032
+      },
+      {
+        "symbol": "fault_stack",
+        "bytes": 1024
+      },
+      {
+        "symbol": "rx_buf",
+        "bytes": 1024
+      },
+      {
+        "symbol": "spk_q",
+        "bytes": 960
+      },
+      {
+        "symbol": "sector.3",
+        "bytes": 848
+      },
+      {
+        "symbol": "ui_st",
+        "bytes": 824
+      },
+      {
+        "symbol": "s",
+        "bytes": 784
+      }
+    ]
+  },
+  "hardware_cpu_usage_measured": true,
+  "baseline": {
+    "flash_bytes": 459856,
+    "main_ram_bytes": 188576,
+    "main_ram_capacity_bytes": 211456,
+    "main_ram_unallocated_bytes": 22880,
+    "largest_ram_symbols": [
+      {
+        "symbol": "ucHeap",
+        "bytes": 41472
+      },
+      {
+        "symbol": "fb_words",
+        "bytes": 38400
+      },
+      {
+        "symbol": "voice",
+        "bytes": 9324
+      },
+      {
+        "symbol": "enc_state",
+        "bytes": 7168
+      },
+      {
+        "symbol": "dec_state",
+        "bytes": 6144
+      },
+      {
+        "symbol": "fifo",
+        "bytes": 5788
+      },
+      {
+        "symbol": "buffer",
+        "bytes": 4096
+      },
+      {
+        "symbol": "sm",
+        "bytes": 3284
+      },
+      {
+        "symbol": "replay",
+        "bytes": 2368
+      },
+      {
+        "symbol": "eng",
+        "bytes": 2276
+      },
+      {
+        "symbol": "ring",
+        "bytes": 2048
+      },
+      {
+        "symbol": "txBursts",
+        "bytes": 1728
+      },
+      {
+        "symbol": "test",
+        "bytes": 1296
+      },
+      {
+        "symbol": "row_hash",
+        "bytes": 1280
+      },
+      {
+        "symbol": "reply",
+        "bytes": 1032
+      },
+      {
+        "symbol": "fault_stack",
+        "bytes": 1024
+      },
+      {
+        "symbol": "rx_buf",
+        "bytes": 1024
+      },
+      {
+        "symbol": "spk_q",
+        "bytes": 960
+      },
+      {
+        "symbol": "sector.3",
+        "bytes": 848
+      },
+      {
+        "symbol": "ui_st",
+        "bytes": 824
+      }
+    ]
+  },
+  "saved_bytes": {
+    "flash_bytes": 32488,
+    "main_ram_bytes": 8552
+  },
+  "hardware_measurement_note": "CPU measurements use the lean preset with optional counters enabled (8 extra static bytes, 200 extra flash bytes, 88 reserved-heap bytes for 11 tasks); release accounting is disabled."
+}

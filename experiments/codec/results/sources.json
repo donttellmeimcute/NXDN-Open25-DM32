@@ -1,0 +1,644 @@
+{
+  "recorded_utc": "2026-10-26T16:29:54.270915+00:00",
+  "pristine": true,
+  "archive_method": "git archive --format=tar <pinned-commit>; generated from fetched upstream Git objects, not a vendor-signed release",
+  "dependencies": [
+    {
+      "name": "imbe_vocoder",
+      "url": "https://github.com/nostar/imbe_vocoder.git",
+      "commit": "03423cb00b8e9ba1be164493e8b98b5bd7c1508c",
+      "commit_date": "2021-11-27T15:29:23-05:00",
+      "archive": "research/codec/originals/imbe_vocoder-03423cb00b8e9ba1be164493e8b98b5bd7c1508c.tar",
+      "archive_bytes": 337920,
+      "archive_sha256": "a815a6a80cc9b1445fd84bb9ae9d483cf2e2b597c94824b04ff900217159483f",
+      "license": "GPL-3.0-or-later notices in DSP sources; repository omits COPYING",
+      "files": {
+        "Makefile": {
+          "bytes": 723,
+          "sha256": "f0636472b88ea6e81e84d07e223794c9f518ad6d5593e105d35126f375affcc2"
+        },
+        "Makefile.Android-aarch64": {
+          "bytes": 1005,
+          "sha256": "220796dc1224dd29570b4dcb64e5b4d9614b25824277cad0b44302d553532342"
+        },
+        "Makefile.Android-armv7a": {
+          "bytes": 1008,
+          "sha256": "d089d20efc48c063371e4c596edf654f939c23e602815a78f2491885624d076d"
+        },
+        "Makefile.win": {
+          "bytes": 799,
+          "sha256": "e8db7f5f9a1aadeb10bbf5a8adb9595a3c4de49f48c1eeb396b4ecd8df3e4c11"
+        },
+        "README.md": {
+          "bytes": 549,
+          "sha256": "6cc87fe0c3f35d035158ddf93f794bdff3db310eb8c96d9f673051fa95fcb2f0"
+        },
+        "aux_sub.cc": {
+          "bytes": 4728,
+          "sha256": "bca604aae000febe0bdb234d6a80b6c290a659ba4439b469ad4a4100ead06852"
+        },
+        "aux_sub.h": {
+          "bytes": 3830,
+          "sha256": "aed248d0ead812a9f9396d328a685e4d05363cb12938ae8ee43e8efeca7c8b4a"
+        },
+        "basic_op.h": {
+          "bytes": 4669,
+          "sha256": "2da864386e95d83b0a158c4a87e3d4f040055ac6024a50caedc433face210072"
+        },
+        "basicop2.cc": {
+          "bytes": 108273,
+          "sha256": "b81589ab4f4eca94e91470681546937f5048785cf4a8a12f9eb6cea57ab99950"
+        },
+        "ch_decode.cc": {
+          "bytes": 5195,
+          "sha256": "0143264ba30e03c3090c943888f0df59e29b923428b93e6f55062e1100de99f4"
+        },
+        "ch_decode.h": {
+          "bytes": 1104,
+          "sha256": "5587399543dccb8d97521999756e758f576a16513f022ac4d3cb26b77e475051"
+        },
+        "ch_encode.cc": {
+          "bytes": 3061,
+          "sha256": "db1f89de858c1327a6025dfb84583a660f088d7aff9d1cddc23d253c2d79aaaf"
+        },
+        "ch_encode.h": {
+          "bytes": 1050,
+          "sha256": "9e50ef7e5ee9a7ac1cb2597a68c8470ae01bfc6454e5c5657314cdb526301b3d"
+        },
+        "dc_rmv.cc": {
+          "bytes": 1856,
+          "sha256": "c57cb89b7ef9f33e7042e185f516c5a4fa0817a4006a1ec6ccaa5f3a45257296"
+        },
+        "dc_rmv.h": {
+          "bytes": 1499,
+          "sha256": "1e4b512f1957c769e745f6697ab1f5e8ec766dad87dd12102c25c4a1c12ae519"
+        },
+        "decode.cc": {
+          "bytes": 3377,
+          "sha256": "61b8fd9f3a3e58a5b454ca96079012ff5d1c27c840753ab2441438523fe987d3"
+        },
+        "decode.h": {
+          "bytes": 1087,
+          "sha256": "b70cdc70b2c4632b504ed0287fcdef45c35fd3da3e7fa6dc7d9bbb60eadd2193"
+        },
+        "dsp_sub.cc": {
+          "bytes": 7134,
+          "sha256": "b7bd59180d6acae0135ae0e91b606ccbfba1b03bb9b856637a8776ac38961a94"
+        },
+        "dsp_sub.h": {
+          "bytes": 2281,
+          "sha256": "6ff1999bc8b83431b26597a0c2f45b529dcb24968c2a601f206f490ed8298a60"
+        },
+        "encode.cc": {
+          "bytes": 4087,
+          "sha256": "a89a33ec155dbbbe95c1e6fe569b2df8f0555adab9b0faad9f2ef28036a86229"
+        },
+        "encode.h": {
+          "bytes": 1104,
+          "sha256": "667b47e03a096412829d66de6fb3eef19ec62867e66a554c0980e758795d5c54"
+        },
+        "globals.h": {
+          "bytes": 1806,
+          "sha256": "7efea79628e0a0020d0b2af2de547131c89bca085a7d443d14f06d675bb30b6b"
+        },
+        "imbe.h": {
+          "bytes": 2078,
+          "sha256": "1b9d2a785a122198fe103c0e0ec443bad268a91565f76e58daa18f1f3daee54f"
+        },
+        "imbe_vocoder.cc": {
+          "bytes": 689,
+          "sha256": "f39f2503c681eb834a4a13e440629e545745e7fbb79eaa6cd0a29e83287f9bf0"
+        },
+        "imbe_vocoder.h": {
+          "bytes": 967,
+          "sha256": "baaf9f29cfcd117aaa4590577782996569aa05f1cae1a0cc7d99b3b4a9104401"
+        },
+        "imbe_vocoder_api.h": {
+          "bytes": 1976,
+          "sha256": "363003540bc0097e2ac900f5bb693ea758af97250ffe750666a1d5a223da54a9"
+        },
+        "imbe_vocoder_impl.cc": {
+          "bytes": 1084,
+          "sha256": "095ac167e6d0761a08021ea9d3cc863aadb02c34a269ee330b646189dc1b89e6"
+        },
+        "imbe_vocoder_impl.h": {
+          "bytes": 3070,
+          "sha256": "b59189a27d5c9819c4b63d993f6c83c09de44c2c1218411c077213f71212e273"
+        },
+        "math_sub.cc": {
+          "bytes": 10455,
+          "sha256": "7efa68bd159b66d620b69c4800bb2b72c18a18e94fbb7a74fa596ceea3126155"
+        },
+        "math_sub.h": {
+          "bytes": 3785,
+          "sha256": "28d3e653da83f7a655cd43f677860f16281d1c029532e55a7dbb0774f58a4174"
+        },
+        "pe_lpf.cc": {
+          "bytes": 2044,
+          "sha256": "7fc859cd4310655ed6202780a995e51e5ce3152e8b90354bae9b1aa8f2fe789c"
+        },
+        "pe_lpf.h": {
+          "bytes": 1507,
+          "sha256": "c5ab3abe24c3232672b479a56cfa405de8aaa28bd4ecb0f2edbaf75770277768"
+        },
+        "pitch_est.cc": {
+          "bytes": 10365,
+          "sha256": "b802037deb74086565f767060ee2e031ac5557ebd9e5ea890cd7b1a525f3c019"
+        },
+        "pitch_est.h": {
+          "bytes": 1006,
+          "sha256": "96ee18b1d0297a9f90e948f0da7a19cdf14911cc31d5153b5c475e3fb7df4003"
+        },
+        "pitch_ref.cc": {
+          "bytes": 4684,
+          "sha256": "b5afe091e7bd4bad835fa3b4482de36f7faeeffc3b33645c1f45888fb6df3359"
+        },
+        "pitch_ref.h": {
+          "bytes": 976,
+          "sha256": "d2a3daa5c34c6578509b30ef1cbdeaac944ce8c32f2e3f5759b21d445d8aed84"
+        },
+        "qnt_sub.cc": {
+          "bytes": 3822,
+          "sha256": "94f9e1ef1b3a1958d6fa3bacdd563045fd17f605a6b180c398ac1a123446e6bc"
+        },
+        "qnt_sub.h": {
+          "bytes": 2549,
+          "sha256": "d3365368e44c630f50e367f05679916d214486a4470e7aeed3fd5290d431c971"
+        },
+        "rand_gen.cc": {
+          "bytes": 1558,
+          "sha256": "78e08517c180ed2966cf64b5233344ba078215233240a604a09261fa8de445ea"
+        },
+        "rand_gen.h": {
+          "bytes": 1303,
+          "sha256": "7f278ddec2c797ef1d3c647d3cfcb196c7acee63982e21fb49dceaa812bed872"
+        },
+        "sa_decode.cc": {
+          "bytes": 5896,
+          "sha256": "a5e0310837138c596836cb51277c49e057eab354e63285babfc55f6e098b6f3d"
+        },
+        "sa_decode.h": {
+          "bytes": 1786,
+          "sha256": "36ea5bda7c48499fb38783602b24b3ac99905bc0dbe55b371f36437d26a12c92"
+        },
+        "sa_encode.cc": {
+          "bytes": 8565,
+          "sha256": "56020621d402957c3069c9cc7d7f6c52296b0d60a62d48bfc15c6596b254e539"
+        },
+        "sa_encode.h": {
+          "bytes": 988,
+          "sha256": "d971d321c04f76429bc7adaafff17283e49e7e160ec73a5f824daa3e2ee3ae8b"
+        },
+        "sa_enh.cc": {
+          "bytes": 5302,
+          "sha256": "d0e9a3babfa2869f67c9b52b58902ba99de7905c74abc7e2168a3071089ebddd"
+        },
+        "sa_enh.h": {
+          "bytes": 1526,
+          "sha256": "efafa3097f2deb7aae8a0ab644b4b595e7d4c865434f549516d00ed257b3d09a"
+        },
+        "tbls.cc": {
+          "bytes": 15603,
+          "sha256": "2b6801812acb3c9f9d5b879385e4733c4105023f157159c80d7212bb4ff9fa81"
+        },
+        "tbls.h": {
+          "bytes": 3483,
+          "sha256": "ddb6337f710c18a60c3bc8771b7b9fd0126562b9c5b2fc6de677d7ff67f76fd3"
+        },
+        "typedef.h": {
+          "bytes": 2134,
+          "sha256": "6f283c292261c3de9bd833510be0a117090e079a0c91bfe778f8281c4ee59815"
+        },
+        "typedefs.h": {
+          "bytes": 5636,
+          "sha256": "6adf532766656ad7abd4e5f357770f12ce80e8649d2676f0af8fb8915e8600b7"
+        },
+        "uv_synt.cc": {
+          "bytes": 3314,
+          "sha256": "ad586db44e52725a55cee4fb1e1dcde4d24efbe409dc46496fa71c87389cc0ff"
+        },
+        "uv_synt.h": {
+          "bytes": 1041,
+          "sha256": "c8b710245e393b584dedff8abee79b0b1f02bea2a74827074a601a76d3278220"
+        },
+        "v_synt.cc": {
+          "bytes": 6504,
+          "sha256": "ba8f71d16da5a967311caf230b4a7a271da0f5fc1ee1d4aee60a84579c829eff"
+        },
+        "v_synt.h": {
+          "bytes": 989,
+          "sha256": "b5ce971679f11a25fd5d1d31a8de57e5622072a2fd713c6acf5c6a9281f5d6c2"
+        },
+        "v_uv_det.cc": {
+          "bytes": 10314,
+          "sha256": "3681a734172c2a10f40fb1ebedb3045ded88f23c93bfaaf3a16927c797371446"
+        },
+        "v_uv_det.h": {
+          "bytes": 973,
+          "sha256": "f10e949d37af89220485f405182f7b033d60258adae7148a4dfae4295ae41ea3"
+        }
+      }
+    },
+    {
+      "name": "mbelib",
+      "url": "https://github.com/szechyjs/mbelib.git",
+      "commit": "9a04ed5c78176a9965f3d43f7aa1b1f5330e771f",
+      "commit_date": "2019-05-28T21:43:53-04:00",
+      "archive": "research/codec/originals/mbelib-9a04ed5c78176a9965f3d43f7aa1b1f5330e771f.tar",
+      "archive_bytes": 2252800,
+      "archive_sha256": "01cf7640c493e18cf2c1550e27ce9e87f1c752b4aa854d07320744d36db566dd",
+      "license": "ISC in COPYRIGHT and C sources",
+      "files": {
+        ".gitignore": {
+          "bytes": 27,
+          "sha256": "3347490a0158823fbbef7c3f8135a6f0675785aff429cc05093e125fd428bae0"
+        },
+        ".travis.yml": {
+          "bytes": 121,
+          "sha256": "4cb46467f5cf83d6c7c571213cd9768ba612b0dcc29754ae09806528b6dace1b"
+        },
+        "CHANGELOG": {
+          "bytes": 1328,
+          "sha256": "56fed21657f607b529bbc255bdc0780b896a73b687d0d67b559b66af9016bca7"
+        },
+        "CMakeLists.txt": {
+          "bytes": 1590,
+          "sha256": "62440c82a29859e8b9993d8ab8624e2092b5f4ea794b45cedd83c2d03321cc1e"
+        },
+        "COPYRIGHT": {
+          "bytes": 794,
+          "sha256": "59df7c481fca54d6ccab5ef36fe1ae6a8217b7f5e13ee4d18f63684a29871b8b"
+        },
+        "README.md": {
+          "bytes": 1403,
+          "sha256": "41a181b300e6fc6c784a03095a1be23c4eaaaf603b330ad16de48ae12187882e"
+        },
+        "ambe3600x2400.c": {
+          "bytes": 19436,
+          "sha256": "30fc8c891bd0e2971115381d85bda874a5fdf549b295db66dec6f43efcb70ca1"
+        },
+        "ambe3600x2400_const.h": {
+          "bytes": 31205,
+          "sha256": "27dd645e468c3ba1f0d2e420cc784ea5f8850cc973ce4a4f8519c4055c1511a1"
+        },
+        "ambe3600x2450.c": {
+          "bytes": 16216,
+          "sha256": "677f1542021011d91e79b5ee7dfe2579e6f02fd173dbbfb4e69c6eba859465e0"
+        },
+        "ambe3600x2450_const.h": {
+          "bytes": 33954,
+          "sha256": "cb02e200baa88e7cda37b9dc57085fd942a9f2911e9707e5c5f998de57f2361a"
+        },
+        "cmake_uninstall.cmake.in": {
+          "bytes": 1040,
+          "sha256": "6a09daf7071d0ad6dc595646353654ca0dbf34cbb6f38222672936e95012c0b0"
+        },
+        "config.h": {
+          "bytes": 950,
+          "sha256": "d77dadc82cf65808b908a268ec4757b0fc55a2d326dd9dd79607ad38cbf3655d"
+        },
+        "debian/changelog": {
+          "bytes": 132,
+          "sha256": "502a91cc2a92623349c14faa702b525b05a66d153d41784f581d6f6a4f7cd0fb"
+        },
+        "debian/compat": {
+          "bytes": 1,
+          "sha256": "19581e27de7ced00ff1ce50b2047e7a567c76b1cbaebabe5ef03f7c3017bb5b7"
+        },
+        "debian/control": {
+          "bytes": 1199,
+          "sha256": "93eeafe21efcbc60c0e800cff4a70861045bbedf1ca28843f2ab9c14b2c834a2"
+        },
+        "debian/copyright": {
+          "bytes": 794,
+          "sha256": "59df7c481fca54d6ccab5ef36fe1ae6a8217b7f5e13ee4d18f63684a29871b8b"
+        },
+        "debian/libmbe-dev.install": {
+          "bytes": 60,
+          "sha256": "1c3dd5613682b1ab8676f838eb9cf7ce605cd7d2434b409e01a7bd9d8c1c88b6"
+        },
+        "debian/libmbe1.install": {
+          "bytes": 18,
+          "sha256": "49485f6e949536c20cb9c8c474e173ad85f9b1ee2cdb94cac8080e674b0a5050"
+        },
+        "debian/rules": {
+          "bytes": 29,
+          "sha256": "6644aac3e6651b8ea551bbc71aac3d3ea36a8c98f3d96c49631f19d85cfa322e"
+        },
+        "debian/source/format": {
+          "bytes": 12,
+          "sha256": "b00e537984cd5ba8c9b85e5cd0a1a2ebbfe3131e5d622c40a70360aea1dbbab2"
+        },
+        "ecc.c": {
+          "bytes": 3369,
+          "sha256": "ea2dfd7d7b2f00ac640e2b0b215ddcf97425c4a822b74811120c7ae7a7fef88a"
+        },
+        "ecc_const.h": {
+          "bytes": 10690,
+          "sha256": "8bd6b61dce5684e92dfbe3f5e4ddfce522dc5be3e3387a99361e645f9e60f153"
+        },
+        "imbe7100x4400.c": {
+          "bytes": 7143,
+          "sha256": "3309d18dccee7e9893f84ac38ae954bb0673eed2edd2f56de8b5addefef74a42"
+        },
+        "imbe7200x4400.c": {
+          "bytes": 13064,
+          "sha256": "da185a5cdcaf2dd2d03a6ea2524bdeea339f97a9d5985efc0fc3a0ad41f172b9"
+        },
+        "imbe7200x4400_const.h": {
+          "bytes": 41049,
+          "sha256": "62982451d7c23d3d6d255bf1dff34c4bdcf9c40e0aa04b7f5f40393705924737"
+        },
+        "libmbe.pc.in": {
+          "bytes": 219,
+          "sha256": "dee3f2b0b8551afededbfab4eb7087a407140394d7577147fd3fa8f7ba19c214"
+        },
+        "mbelib.c": {
+          "bytes": 13045,
+          "sha256": "f51242d7d23693870af503c7614a886ed6f119c5f215a1841fa81714b7f425ed"
+        },
+        "mbelib.h": {
+          "bytes": 6347,
+          "sha256": "be480617bb4750d2a6ed493b24a80c9e958c60ff3dd58c928fc348b5a46d312e"
+        },
+        "mbelib_Author.pgp": {
+          "bytes": 1679,
+          "sha256": "89dc73dc33119340c3c2cf866c250e3c3e36e62a59691d99b3e8a3283e2f3c45"
+        },
+        "mbelib_const.h": {
+          "bytes": 11143,
+          "sha256": "656718c330e5170b2fa5979d9b28bfb96f970f5af7211f29b450481afbe4d07d"
+        },
+        "test/CMakeLists.txt": {
+          "bytes": 360,
+          "sha256": "5ca045794c08c71ef07f2d60f0383295c2ba4601c1c74226ba45ae25932107eb"
+        },
+        "test/gmock/CMakeLists.txt": {
+          "bytes": 1620,
+          "sha256": "29e6a6e983d0950686b9453cd08743fb93c86225f0cc4d009e0809ad2537775e"
+        },
+        "test/gmock/include/gmock/gmock-actions.h": {
+          "bytes": 37132,
+          "sha256": "1d9eced3dc3de967664456b5cee96cff5139bb81b0e91df95cde2ca4f58b6cbc"
+        },
+        "test/gmock/include/gmock/gmock-cardinalities.h": {
+          "bytes": 5820,
+          "sha256": "38a158dfaa727b3cb43f7af0a2e5683a243717f6820df795a0d66a4a164b1534"
+        },
+        "test/gmock/include/gmock/gmock-generated-actions.h": {
+          "bytes": 105123,
+          "sha256": "080ae739826ad7efabbad02ecd398be46d8629e35eb341ec6619759cb5d676b4"
+        },
+        "test/gmock/include/gmock/gmock-generated-actions.h.pump": {
+          "bytes": 27476,
+          "sha256": "ed3baa5edc38ff8320ad60ea50b6aa094972aa64f1472923b6b08c630cf0f8bc"
+        },
+        "test/gmock/include/gmock/gmock-generated-function-mockers.h": {
+          "bytes": 43374,
+          "sha256": "026042e042c57786f83d40ce376b6413e7847ff88d96773556333753a85aa7ed"
+        },
+        "test/gmock/include/gmock/gmock-generated-function-mockers.h.pump": {
+          "bytes": 8571,
+          "sha256": "81a0566c7777aefdf2ce37c5c0a999cc32a149f09943315cca0a9690fe646e17"
+        },
+        "test/gmock/include/gmock/gmock-generated-matchers.h": {
+          "bytes": 86544,
+          "sha256": "9b5d60b2d287289a13aa4ba710c2e485be3d109e830256e6e05effc88199f168"
+        },
+        "test/gmock/include/gmock/gmock-generated-matchers.h.pump": {
+          "bytes": 21765,
+          "sha256": "fcd45c84265916014beda6db80eca8a6374c36df0b20cb6d7f5a9d999c6e5444"
+        },
+        "test/gmock/include/gmock/gmock-generated-nice-strict.h": {
+          "bytes": 16184,
+          "sha256": "0ab2c7c9866e05ea37888f18ab7f385bf1f07d52da3dbaf345621a3c770a79d7"
+        },
+        "test/gmock/include/gmock/gmock-generated-nice-strict.h.pump": {
+          "bytes": 6034,
+          "sha256": "56c1c164054d4a911c6430ed43eeb93e1a6efa9429df0b93208be285ad84b4cb"
+        },
+        "test/gmock/include/gmock/gmock-matchers.h": {
+          "bytes": 144416,
+          "sha256": "07b5a3ec96ef3079328df0bda45b84bc3a3e19062b9896f4537e84da9aa5dddd"
+        },
+        "test/gmock/include/gmock/gmock-more-actions.h": {
+          "bytes": 8851,
+          "sha256": "722b9d0806ec271f6a1234da217c1bb79cd5ab1893c929b9e759f338977c7c80"
+        },
+        "test/gmock/include/gmock/gmock-more-matchers.h": {
+          "bytes": 2393,
+          "sha256": "f7322b3fbc4e5d3eab188cbf8f2226ce086b5728dccbcfa09422b2e4bf83f5d4"
+        },
+        "test/gmock/include/gmock/gmock-spec-builders.h": {
+          "bytes": 67310,
+          "sha256": "8d2be367c965007e76f455a6123809f6b98c21e7a2937433aa90297a2c34475b"
+        },
+        "test/gmock/include/gmock/gmock.h": {
+          "bytes": 3638,
+          "sha256": "a8129e78860eebe582ce08d7fce5d74b8f102a0cabcb06bcfed1804087a5f5d7"
+        },
+        "test/gmock/include/gmock/internal/gmock-generated-internal-utils.h": {
+          "bytes": 11456,
+          "sha256": "57cdd806cdc9e97327c379577e1da1a4634113de303a88efb69021328da5729c"
+        },
+        "test/gmock/include/gmock/internal/gmock-generated-internal-utils.h.pump": {
+          "bytes": 4930,
+          "sha256": "f865c7e8923790bee025d59e345ba119fc834e393d95b97857b46a33bef3f026"
+        },
+        "test/gmock/include/gmock/internal/gmock-internal-utils.h": {
+          "bytes": 19896,
+          "sha256": "dcd62c6d51311b66e20c4cb405af456ce1477bb76089843c190bf2bc683f0cd4"
+        },
+        "test/gmock/include/gmock/internal/gmock-port.h": {
+          "bytes": 3511,
+          "sha256": "1e1579f73041ef1719eded50b0e8646ae878192696cf06a0f384371166e68a0a"
+        },
+        "test/gmock/src/gmock-all.cc": {
+          "bytes": 2150,
+          "sha256": "c9f5f6c6e08815a2d7b279bd43a5207f7b2abf0bff072523669ca4710bccc081"
+        },
+        "test/gmock/src/gmock-cardinalities.cc": {
+          "bytes": 5305,
+          "sha256": "dc08474abf56922cdcf7611d8ee7537cc9e1c95d49c7323e6be5ae99654b509a"
+        },
+        "test/gmock/src/gmock-internal-utils.cc": {
+          "bytes": 6702,
+          "sha256": "088f6fe74aa2423a74995c98e0f19d0ad47a0170831ea9b3e0674d4a746bb0ef"
+        },
+        "test/gmock/src/gmock-matchers.cc": {
+          "bytes": 18516,
+          "sha256": "ee966a6ee833e8a3fa5301cba7266d512b2f8601ade53e378a58b8b8000db15b"
+        },
+        "test/gmock/src/gmock-spec-builders.cc": {
+          "bytes": 30226,
+          "sha256": "f1014de6648ac2e23cfccd7f9d79a233ced5ffa58b304add31502c1089468406"
+        },
+        "test/gmock/src/gmock.cc": {
+          "bytes": 6962,
+          "sha256": "35d6ee416f57e52a65ccb3592f212c334ed0cf034d6b41d200554bffcdeacc80"
+        },
+        "test/gmock/src/gmock_main.cc": {
+          "bytes": 2593,
+          "sha256": "219c3c2ce28cf79e7fd09f3e8cf08b77b4ea2cf60a4f795e20f8249c8444017e"
+        },
+        "test/gtest/CMakeLists.txt": {
+          "bytes": 2311,
+          "sha256": "a6774d7a677fb43aacc80131d7e5a770774ee6b07bc60fa331c219c59ccb45a5"
+        },
+        "test/gtest/cmake/internal_utils.cmake": {
+          "bytes": 9548,
+          "sha256": "81e9f097c94570917e1d63e34206ac1cff927bf9b7ccdf9647fe352fa30fcd22"
+        },
+        "test/gtest/include/gtest/gtest-death-test.h": {
+          "bytes": 11523,
+          "sha256": "a04017a66a7c9fa04da6934439d589e52171e93b131f1f4ea22973bbaa6f77b0"
+        },
+        "test/gtest/include/gtest/gtest-message.h": {
+          "bytes": 9186,
+          "sha256": "6629c251f1e30e52f22de8be0d150c2c43b7bf6c7588ee83b1ef08691bdc210a"
+        },
+        "test/gtest/include/gtest/gtest-param-test.h": {
+          "bytes": 75864,
+          "sha256": "4d81da0df5d2dc4ae9c6c9cc136f7eff7e52383e2f410207ba444a6707d2b2c2"
+        },
+        "test/gtest/include/gtest/gtest-param-test.h.pump": {
+          "bytes": 18796,
+          "sha256": "d210e8efe24ce2a9d38711f80e8099b6da9e7fc1af53e0eff8e9c2c917b564fb"
+        },
+        "test/gtest/include/gtest/gtest-printers.h": {
+          "bytes": 31609,
+          "sha256": "983ad443e47ac99744a586804acd0635e4e2fdfee1304234df35a8b3a3f74cb4"
+        },
+        "test/gtest/include/gtest/gtest-spi.h": {
+          "bytes": 9952,
+          "sha256": "5115d5a8ced36a20b8cec034812f7b0d2ac20d511a147f9beea9b0ef27d94b56"
+        },
+        "test/gtest/include/gtest/gtest-test-part.h": {
+          "bytes": 6509,
+          "sha256": "51b8aa341c0fc6676ef27c29730bfd8acb7f1151ffeb3d6259dc02f84e26d657"
+        },
+        "test/gtest/include/gtest/gtest-typed-test.h": {
+          "bytes": 10242,
+          "sha256": "1ec858bbb9ed8a8bb553232df016437c080b2670f00453b4de297c286eb78c21"
+        },
+        "test/gtest/include/gtest/gtest.h": {
+          "bytes": 88434,
+          "sha256": "7810910f448541ab7680871b1f5b2a58bcaa5145fea1079f9617a50130280588"
+        },
+        "test/gtest/include/gtest/gtest_pred_impl.h": {
+          "bytes": 15145,
+          "sha256": "3b83beefeaec46bffe40fc738870b310a86517ff436a157e4c7e5dcd5194ad65"
+        },
+        "test/gtest/include/gtest/gtest_prod.h": {
+          "bytes": 2324,
+          "sha256": "4a99a3d986a45b4d6d9b3af54809f015c54aa98274793a4ae173f5010d0ad33c"
+        },
+        "test/gtest/include/gtest/internal/gtest-death-test-internal.h": {
+          "bytes": 13429,
+          "sha256": "a47f98b749c53ae192a3d50e329a2e9624d5fe32df42df692128f17a2373feab"
+        },
+        "test/gtest/include/gtest/internal/gtest-filepath.h": {
+          "bytes": 9603,
+          "sha256": "2134b11c60d315237e8ebaf95ac4ec47a5fc48ae35cc21be238bf75e64dd5123"
+        },
+        "test/gtest/include/gtest/internal/gtest-internal.h": {
+          "bytes": 44145,
+          "sha256": "876b0debfe9a6810bb0f478ec06e9ae7717d80a4d846784331396d2c17fc5c98"
+        },
+        "test/gtest/include/gtest/internal/gtest-linked_ptr.h": {
+          "bytes": 8101,
+          "sha256": "860c6db3d9d68a088f719fc7df063f9abc26fec4779d32197875c7e1f66e91dd"
+        },
+        "test/gtest/include/gtest/internal/gtest-param-util-generated.h": {
+          "bytes": 192176,
+          "sha256": "58d92033f9afd048b0ee60f646d749c9b0cc786986b9d04eb61835499bbf5fd1"
+        },
+        "test/gtest/include/gtest/internal/gtest-param-util-generated.h.pump": {
+          "bytes": 9416,
+          "sha256": "d97335810488eea03a033c3cc17776d90d83ddf04017867950922984af92cf4b"
+        },
+        "test/gtest/include/gtest/internal/gtest-param-util.h": {
+          "bytes": 24191,
+          "sha256": "d5d0a71a3bd2079229090127d8f2030bcaa0d5a43a2bb10f930e1d712f878f1a"
+        },
+        "test/gtest/include/gtest/internal/gtest-port.h": {
+          "bytes": 68796,
+          "sha256": "30ca925b6b462db4cc1fd26cd586763b91b5a7ddd74e3f7da216a0319ce0208c"
+        },
+        "test/gtest/include/gtest/internal/gtest-string.h": {
+          "bytes": 6968,
+          "sha256": "6f757f0235c2e0df7aa06bca64d0d05a5b2826c1c5cc74f90298d468df50b444"
+        },
+        "test/gtest/include/gtest/internal/gtest-tuple.h": {
+          "bytes": 28223,
+          "sha256": "378d8942feee5fc8549f1a9bee19b3615c994da85029e6730c08729c3993bf02"
+        },
+        "test/gtest/include/gtest/internal/gtest-tuple.h.pump": {
+          "bytes": 9226,
+          "sha256": "254a516783167d68bf8270d83bf8b045071a80dbb9cdd26e7730e0385f77b5a1"
+        },
+        "test/gtest/include/gtest/internal/gtest-type-util.h": {
+          "bytes": 185666,
+          "sha256": "7c28cadd1ff67a87c0a43a3a06d5bed9819a7a0a5f29022fb692b98910ece1f3"
+        },
+        "test/gtest/include/gtest/internal/gtest-type-util.h.pump": {
+          "bytes": 9317,
+          "sha256": "8674a6fbea0d94b1388a686cb415af9d5d4dc1a49cf292e145779f0c214ef9fd"
+        },
+        "test/gtest/src/gtest-all.cc": {
+          "bytes": 2161,
+          "sha256": "568ac119f5e6418f1fbcfbdf185d724657d7f3539b47822da229ac5d015626b2"
+        },
+        "test/gtest/src/gtest-death-test.cc": {
+          "bytes": 50949,
+          "sha256": "3f5c98d87ababa2e73acaad7d96675da0643381636e18ff4f2f635ae1055bb00"
+        },
+        "test/gtest/src/gtest-filepath.cc": {
+          "bytes": 14238,
+          "sha256": "33cc86b6612b3e0ea1923f284330c1937fb0b7afdbcd5307bb100863e6d56972"
+        },
+        "test/gtest/src/gtest-internal-inl.h": {
+          "bytes": 46465,
+          "sha256": "c0c979c1f2b02528307e700ad48b2813393199cf1f8193111bf04a51f61c3acd"
+        },
+        "test/gtest/src/gtest-port.cc": {
+          "bytes": 27466,
+          "sha256": "7270c8999365c8410ba8a9f822176a38c02e50af1d560e95ce83c40c63783cd0"
+        },
+        "test/gtest/src/gtest-printers.cc": {
+          "bytes": 12275,
+          "sha256": "2a2f6d705130814b0607bf75005628f838ad2cf5028b35d4928789b3e5e3a83b"
+        },
+        "test/gtest/src/gtest-test-part.cc": {
+          "bytes": 4159,
+          "sha256": "009f8978ffd308baea4ebf0d138333e550e265762f9a8463d28e055ece146d92"
+        },
+        "test/gtest/src/gtest-typed-test.cc": {
+          "bytes": 3762,
+          "sha256": "21af4c487051ffa6445adf7c59b9d46284a79c86d70e4c472f289d8d2248dc41"
+        },
+        "test/gtest/src/gtest.cc": {
+          "bytes": 184142,
+          "sha256": "993c5eb5aa3d332227af91efd68fc5ff8d8e1c89bdb7c1f7bfe63adb8fc5a2a7"
+        },
+        "test/gtest/src/gtest_main.cc": {
+          "bytes": 1765,
+          "sha256": "a133bc4d20045e0219aaa244161a0026e374874a55b1167a2591988ebfbfc75f"
+        },
+        "test/mbe-test.cpp": {
+          "bytes": 817,
+          "sha256": "799df020f4ea5b97f1886a4b59e40d3b1c3bfbe13bc4f65c2472a2dd568eaf05"
+        },
+        "test/test.cpp": {
+          "bytes": 135,
+          "sha256": "6c051b5ca3eee14c82738ced0ca89b41725ea443790ea04af00bac043475e05a"
+        }
+      }
+    }
+  ],
+  "additional_license_text": {
+    "url": "https://www.gnu.org/licenses/gpl-3.0.txt",
+    "path": "LICENSES/GPL-3.0-or-later.txt",
+    "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+  }
+}

@@ -1,0 +1,13 @@
+research/
+build/
+toolchain/
+artifacts/
+logs/
+*.pyc
+__pycache__/
+.venv/
+.DS_Store
+*.log
+experiments/codec/out/
+tmp/
+backups/

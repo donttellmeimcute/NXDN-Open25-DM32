@@ -1,0 +1,13 @@
+{
+  "kind": "relocatable software components; not executable radio firmware",
+  "hardware_verified": false,
+  "sha256": "8cfa6b2f86f3ebfae09f7ec552ba5b844c2aa2884b71be61d4bb2348d83c6e50",
+  "size": "   text\t   data\t    bss\t    dec\t    hex\tfilename\n  34072\t      0\t     12\t  34084\t   8524\tartifacts/p25-codec-ck803s.relocatable.o\n",
+  "unresolved_symbols": [],
+  "limitations": [
+    "No RF/modem/audio/interrupt/PTT driver integration",
+    "No verified free stock memory placement",
+    "No target execution/performance measurements",
+    "No flash layout/erase-boundary validation"
+  ]
+}

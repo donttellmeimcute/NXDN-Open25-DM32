@@ -1,0 +1,2 @@
+/* Prototypes only. The audited div_s path no longer calls abort. */
+extern "C" void abort(void) __attribute__((noreturn));

@@ -1,0 +1,120 @@
+{
+  "method": "GCC -fstack-usage/-fcallgraph-info=su, known frame sum along longest simple call path. Cycles are cut on repetition. This is an estimate, not a whole-program bound or stack high-water measurement.",
+  "limitations": "Interrupt nesting, scheduler, startup, external memset frame and any unresolved call edges require a final linked-image audit and on-target stack painting. Shift helper mutual call edges are input-sign dependent; actual recursion is bounded by the source's sign normalization.",
+  "roots": {
+    "dm32_imbe_encode": {
+      "known_frame_sum_along_longest_simple_path": 3900,
+      "path": [
+        {
+          "function": "int dm32_imbe_encode(dm32_imbe_context*, int16_t*, uint16_t*)",
+          "frame_bytes": 28
+        },
+        {
+          "function": "void imbe_vocoder_impl::encode(IMBE_PARAM*, Word16*, Word16*)",
+          "frame_bytes": 40
+        },
+        {
+          "function": "void imbe_vocoder_impl::pitch_est(IMBE_PARAM*, Word16*)",
+          "frame_bytes": 2116
+        },
+        {
+          "function": "void imbe_vocoder_impl::e_p(Word16*, Word16*)",
+          "frame_bytes": 1688
+        },
+        {
+          "function": "Word32 imbe_vocoder_impl::autocorr(Word16*, Word16, Word16)",
+          "frame_bytes": 28
+        }
+      ],
+      "issues": [
+        "unknown-frame:memset"
+      ]
+    },
+    "dm32_imbe_decode": {
+      "known_frame_sum_along_longest_simple_path": 1632,
+      "path": [
+        {
+          "function": "int dm32_imbe_decode(dm32_imbe_context*, const uint16_t*, int16_t*)",
+          "frame_bytes": 36
+        },
+        {
+          "function": "void imbe_vocoder_impl::decode(IMBE_PARAM*, Word16*, Word16*)",
+          "frame_bytes": 336
+        },
+        {
+          "function": "void imbe_vocoder_impl::v_synt(IMBE_PARAM*, Word16*)",
+          "frame_bytes": 1236
+        },
+        {
+          "function": "Word16 cos_fxp(Word16)",
+          "frame_bytes": 24
+        }
+      ],
+      "issues": [
+        "unknown-frame:memset"
+      ]
+    }
+  },
+  "largest_frames": [
+    {
+      "function": "void imbe_vocoder_impl::pitch_est(IMBE_PARAM*, Word16*)",
+      "frame_bytes": 2116
+    },
+    {
+      "function": "void imbe_vocoder_impl::e_p(Word16*, Word16*)",
+      "frame_bytes": 1688
+    },
+    {
+      "function": "void imbe_vocoder_impl::v_synt(IMBE_PARAM*, Word16*)",
+      "frame_bytes": 1236
+    },
+    {
+      "function": "void imbe_vocoder_impl::uv_synt(IMBE_PARAM*, Word16*)",
+      "frame_bytes": 1092
+    },
+    {
+      "function": "void pitch_ref(IMBE_PARAM*, Cmplx16*)",
+      "frame_bytes": 660
+    },
+    {
+      "function": "void imbe_vocoder_impl::v_uv_det(IMBE_PARAM*, Cmplx16*)",
+      "frame_bytes": 556
+    },
+    {
+      "function": "void imbe_vocoder_impl::sa_encode(IMBE_PARAM*)",
+      "frame_bytes": 492
+    },
+    {
+      "function": "void imbe_vocoder_impl::sa_decode(IMBE_PARAM*)",
+      "frame_bytes": 464
+    },
+    {
+      "function": "void imbe_vocoder_impl::decode(IMBE_PARAM*, Word16*, Word16*)",
+      "frame_bytes": 336
+    },
+    {
+      "function": "void sa_enh(IMBE_PARAM*)",
+      "frame_bytes": 304
+    },
+    {
+      "function": "void encode_frame_vector(IMBE_PARAM*, Word16*)",
+      "frame_bytes": 188
+    },
+    {
+      "function": "void decode_frame_vector(IMBE_PARAM*, Word16*)",
+      "frame_bytes": 180
+    },
+    {
+      "function": "void imbe_vocoder_impl::fft(Word16*, Word16, Word16)",
+      "frame_bytes": 84
+    },
+    {
+      "function": "void imbe_vocoder_impl::dct(Word16*, Word16, Word16, Word16*)",
+      "frame_bytes": 60
+    },
+    {
+      "function": "void imbe_vocoder_impl::idct(Word16*, Word16, Word16, Word16*)",
+      "frame_bytes": 48
+    }
+  ]
+}

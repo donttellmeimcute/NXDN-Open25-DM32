@@ -1,0 +1,11 @@
+/* Prototypes only. A real target application must provide these routines. */
+#ifndef DM32_FREESTANDING_CSTRING
+#define DM32_FREESTANDING_CSTRING
+#include <stddef.h>
+extern "C" {
+void *memset(void *, int, size_t);
+void *memcpy(void *, const void *, size_t);
+void *memmove(void *, const void *, size_t);
+}
+namespace std { using ::memset; using ::memcpy; using ::memmove; }
+#endif

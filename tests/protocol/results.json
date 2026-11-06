@@ -1,0 +1,64 @@
+{
+  "reference_op25_commit": "3f44d43eb449bb4753247ce848bb42a403823dea",
+  "random_seed": 9522,
+  "hardware_verified": false,
+  "nid": {
+    "all_nac_voice_duid_vectors": 20480,
+    "random_0_to_11_error_vectors": 1000
+  },
+  "rs": {
+    "p25craft_encode_and_ezpwd_decode_vectors": 4200
+  },
+  "imbe": {
+    "op25_channel_encode_decode_random_vectors": 1000
+  },
+  "interleave": {
+    "op25_interleave_positions": 1296
+  },
+  "frames": {
+    "full_frame_p25craft_vectors": 250,
+    "fixtures": [
+      {
+        "path": "tests/protocol/vectors/nac293-hdu.bin",
+        "bytes": 99,
+        "sha256": "d7fb860af9c9b98d1b713c72557faf01c51822e1db2276fb5cc1da12cdce0c7c"
+      },
+      {
+        "path": "tests/protocol/vectors/nac293-ldu1.bin",
+        "bytes": 216,
+        "sha256": "1f300a2c0684bdfe318f0e43b6358ac61871c1d588f46ce622c9e55148b87f94"
+      },
+      {
+        "path": "tests/protocol/vectors/nac293-ldu2.bin",
+        "bytes": 216,
+        "sha256": "db077c413d6c60bb2b4bce4fcb3a2738105fef7d5c7f6501e730b4feab966eb8"
+      },
+      {
+        "path": "tests/protocol/vectors/nac293-tdu.bin",
+        "bytes": 18,
+        "sha256": "3cebb9f87381c350174490957cdac26f6e6bc707fa3595b9d88a83f0b1ff4b7e"
+      },
+      {
+        "path": "tests/protocol/vectors/nac293-tdulc.bin",
+        "bytes": 54,
+        "sha256": "bf3d726b8cae45fce774823b3d8b2a737daa809cb67f7c549ffaf0de8747d4dc"
+      }
+    ]
+  },
+  "stream": {
+    "stream_cases": [
+      "normal",
+      "inverted",
+      "wrong_nac",
+      "truncated_reacquisition",
+      "two_sync_errors",
+      "invalid_dibit"
+    ]
+  },
+  "damage": {
+    "damaged_metadata_cases": 7,
+    "encrypted_audio_flag": "clear_voice_false",
+    "invalid_lengths_and_sync": "rejected"
+  },
+  "status": "passed"
+}

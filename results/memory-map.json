@@ -1,0 +1,40 @@
+{
+  "segments": [
+    {
+      "segment": "flash",
+      "image_sha256": "03107b6f600e7fa95105af8324cff349c0f17fe30db249c14d11e79baa8da97a",
+      "file_offset": 256,
+      "runtime_address": 50380800,
+      "size": 869432,
+      "sha256": "97106fc968c848d552a5ee906cc81173e49fd7069fec21d85af631e1cb2e70e5",
+      "confidence": "direct startup loop/literal observation"
+    },
+    {
+      "segment": "iram",
+      "image_sha256": "03107b6f600e7fa95105af8324cff349c0f17fe30db249c14d11e79baa8da97a",
+      "file_offset": 736416,
+      "runtime_address": 65536,
+      "size": 127128,
+      "sha256": "10d6388a693a11181c4f37ac69f88f9a3dcdd189b8e2a93633d52cfdda13d34d",
+      "confidence": "direct startup loop/literal observation"
+    },
+    {
+      "segment": "sahb",
+      "image_sha256": "03107b6f600e7fa95105af8324cff349c0f17fe30db249c14d11e79baa8da97a",
+      "file_offset": 417920,
+      "runtime_address": 402655232,
+      "size": 17404,
+      "sha256": "8ce1a1f1c0b1b640c1796d82dbcb64a4a9b7dd14ab26826d1d32a15178812f58",
+      "confidence": "direct startup loop/literal observation"
+    }
+  ],
+  "zeroed": {
+    "start": 192664,
+    "end_exclusive": 305072
+  },
+  "initial_stack": 327680,
+  "vector_base": 65536,
+  "application_entry_candidate": 50380800,
+  "next_stage_call": 188760,
+  "warning": "Static analysis only; not a full-chip image or flash candidate."
+}

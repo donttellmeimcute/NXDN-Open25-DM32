@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "target_id": "dm32-01-01-049-public",
+  "status": "static-analysis target only; physical hardware revision unverified",
+  "upstream_url": "https://github.com/M7OCM/DM-32UV/blob/DM-32UV-Firmware-(most-common)/DM32.01.01.049.bin",
+  "mirror_url": "https://github.com/rogerclarkmelbourne/DM32/blob/4b2185944a85a578ae33626922b763db6256533e/M7OCM/branches/DM-32UV-Firmware-(most-common)/DM32.01.01.049.bin",
+  "local_image": "research/originals/DM32.01.01.049.bin",
+  "family": "DM32.01.*",
+  "version": "DM32.01.01.049",
+  "image_size": 869688,
+  "image_sha256": "03107b6f600e7fa95105af8324cff349c0f17fe30db249c14d11e79baa8da97a",
+  "container": {
+    "marker": "BFUV32-V2",
+    "header_size": 256,
+    "last_header_bytes": "END"
+  },
+  "payload_size": 869432,
+  "payload_sha256": "97106fc968c848d552a5ee906cc81173e49fd7069fec21d85af631e1cb2e70e5",
+  "verified_application_flash_offset": null,
+  "verified_erase_ranges": null,
+  "release_candidate": false
+}

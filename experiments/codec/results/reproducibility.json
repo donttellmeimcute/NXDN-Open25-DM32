@@ -1,0 +1,21 @@
+{
+  "recorded_utc": "2026-10-26T16:29:55.771872+00:00",
+  "method": "Two separate build.py --target --out directories, specific generated path maps and GNU ar rcsD",
+  "directories": [
+    "experiments/codec/out/repro-a",
+    "experiments/codec/out/repro-b"
+  ],
+  "files": {
+    "libdm32_imbe.a": {
+      "sha256": "18d6ce5c772472f44f57380c05ecfcdad04e9eaf41241be6344c1cabef612c3a",
+      "bytes": 383090,
+      "bit_identical": true
+    },
+    "codec-all.o": {
+      "sha256": "49172958f17f1d6e4d42daebfc662c8b4b6ce874fb492efbdf28a237e0e05c1d",
+      "bytes": 339296,
+      "bit_identical": true
+    }
+  },
+  "scope": "codec objects/archive only; not a whole firmware build or a hardware test"
+}

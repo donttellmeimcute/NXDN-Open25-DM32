@@ -1,0 +1,277 @@
+{
+  "date": "2026-11-05",
+  "scope": "Bounded native-PHY modem experiment interface; conventional P25 hardware feasibility preparation",
+  "upstream_commit": "dfbaf20c400c73e2ccf6edb80af7d1d255bee418",
+  "freertos_commit": "3a22924e0a9ddbbc8b0758881c33b3422a5cc20d",
+  "hardware_verified": false,
+  "radio_connected": false,
+  "serial_port_opened": false,
+  "flashed": false,
+  "rf_transmitted": false,
+  "operational_p25_voice_mode": false,
+  "trunk_tracking_implemented": false,
+  "interface": {
+    "debug_command": "0x21",
+    "protocol_version": 1,
+    "status_words": 37,
+    "raw_block_bytes": 36,
+    "rx_ring_blocks": 16,
+    "tx_ring_blocks": 8,
+    "max_blocks": 60,
+    "max_duration_ms": 2000,
+    "lease_range_ms": [
+      100,
+      500
+    ],
+    "guard_timer": 6,
+    "guard_period_us": 1000,
+    "pa_timer": 3,
+    "arm_touches_hardware": false,
+    "tx_explicit_opt_in": true,
+    "automatic_restart": false,
+    "host_controller_bytes": 1296
+  },
+  "checks": {
+    "native_controller_chip_sanitizers": "pass: ASan and UBSan; actual controller/chip on register arrays",
+    "cable_layer_sanitizers": "pass: actual command/radio ownership logic on board/RTOS doubles",
+    "interrupt_port_sanitizers": "pass: actual port translation unit on interrupt/timer doubles",
+    "adversarial_events": 100000,
+    "native_client_unittests": 9,
+    "all_host_python_unittests": 40,
+    "conventional_voice_regression": "pass: actual IMBE + CAI; PCM CRC32 4e158373, 549 air bytes, 18 PCM blocks",
+    "host_reference_warnings": "existing mbelib-only deprecated sprintf and unused variables/parameter; no target warnings",
+    "pristine_radiofoundry": "unchanged"
+  },
+  "fault_and_control_coverage": [
+    "ARM without hardware access",
+    "strict ordered bounded TX refill",
+    "both native TX RAM halves identical",
+    "raw RX bytes and full SYS/RX_TYPE_INFO metadata retained",
+    "only owned W1C flags acknowledged",
+    "queue overflow and underrun shutdown",
+    "duplicate/early/late/missing interrupts",
+    "32-bit clock wrap",
+    "absolute TX deadline despite fresh heartbeats",
+    "expired lease cannot be refreshed",
+    "independent timer shutdown without radio-task service",
+    "STOP during setup cannot reactivate",
+    "stale admission rejection cannot fault a newly armed session",
+    "late PA interrupt before/after cleanup",
+    "abnormal and unexpected RX-mode RF interrupt",
+    "setup/write/restore failures",
+    "unread capture preserved on reset/rearm",
+    "stale session and malformed packet/capacity rejection",
+    "radio PTT request cancellation and consumption",
+    "eight admission denials and power-switch loss",
+    "running timer conflict refusal",
+    "exact port handler/mask restoration",
+    "host transport loss and interrupt finally STOP"
+  ],
+  "builds": {
+    "native": {
+      "p25_enabled": true,
+      "native_interface_enabled": true,
+      "flash_bytes": 432008,
+      "ram_bytes": 182232,
+      "ram_region_bytes": 211456,
+      "ram_region_remaining_bytes": 29224,
+      "forced_rebuild_identical": true,
+      "audits": {
+        "unresolved_symbols": [],
+        "high_register_instructions": 0,
+        "compiler_warnings": 0
+      },
+      "outputs": {
+        "build/radiofoundry-p25/build/dm32-p25-native/rfoundry_dm32.elf": "72a8c54ef7c756312620697ab70906879d155ed17a90ab67e02f96a2dcf62967",
+        "build/radiofoundry-p25/build/dm32-p25-native/rfoundry_dm32.bin": "0afa03c26df3f7d93b040890cf6887698d730adc5767659335df855886c98cb0",
+        "build/radiofoundry-p25/build/dm32-p25-native/rfoundry_dm32.map": "94a1a3f82d355a76fbe020fc17a5379d0423253e739fb9b60cf96ea01cfb1131",
+        "build/radiofoundry-p25/build/dm32-p25-native/rfoundry_dm32.codec.bin": "01e029f457a4fb99b652a3350b0890012a22cad5ead56c453f06dde824e4af5f"
+      }
+    },
+    "lab": {
+      "p25_enabled": true,
+      "native_interface_enabled": false,
+      "flash_bytes": 426572,
+      "ram_bytes": 177200,
+      "ram_region_bytes": 211456,
+      "ram_region_remaining_bytes": 34256,
+      "forced_rebuild_identical": false,
+      "audits": {
+        "unresolved_symbols": [],
+        "high_register_instructions": 0,
+        "compiler_warnings": 0
+      },
+      "outputs": {
+        "build/radiofoundry-p25/build/dm32-p25-lab/rfoundry_dm32.elf": "1c7fb5c671ca150919bad43f76f7df73a3d64556b89a90baf25110f5ded623db",
+        "build/radiofoundry-p25/build/dm32-p25-lab/rfoundry_dm32.bin": "4a6c2ae1282f0b3d7616f2dcf2192034050995f8659b9524237aa732ae116e84",
+        "build/radiofoundry-p25/build/dm32-p25-lab/rfoundry_dm32.map": "509bd6b5d8bd4e848e46d6ee7c9c28653bf6320667a4c432a72cffe83ea59f48"
+      }
+    },
+    "off": {
+      "p25_enabled": false,
+      "native_interface_enabled": false,
+      "flash_bytes": 391036,
+      "ram_bytes": 159640,
+      "ram_region_bytes": 211456,
+      "ram_region_remaining_bytes": 51816,
+      "forced_rebuild_identical": false,
+      "audits": {
+        "unresolved_symbols": [],
+        "high_register_instructions": 0,
+        "compiler_warnings": 0
+      },
+      "outputs": {
+        "build/radiofoundry-p25/build/dm32-p25-off/rfoundry_dm32.elf": "be22d9c3495d82c168601e3daada82d9d2c1c5958a1145f23943961b6126e03c",
+        "build/radiofoundry-p25/build/dm32-p25-off/rfoundry_dm32.bin": "ae3a42ebc1b9ef22d13d6b40c2c00b2c92bb5e930fc5b8b7145d8dd070cb927e",
+        "build/radiofoundry-p25/build/dm32-p25-off/rfoundry_dm32.map": "43961f3b3d57d619287140732378a3c549e837fb0987339bdbb0c907f25747bb"
+      }
+    }
+  },
+  "static_stack": {
+    "all_tasks_and_native_irq_paths": "pass",
+    "port_overhead_bytes": 68,
+    "margin_bytes": 128,
+    "irq_stack_shared_non_nesting": true,
+    "included_board_callback_edges_supplied": true,
+    "entries": {
+      "start": {
+        "stack_bytes": 2560,
+        "static_deepest_bytes": 1604,
+        "remaining_after_allowances_bytes": 760
+      },
+      "host": {
+        "stack_bytes": 2924,
+        "static_deepest_bytes": 1428,
+        "remaining_after_allowances_bytes": 1300
+      },
+      "input": {
+        "stack_bytes": 1024,
+        "static_deepest_bytes": 400,
+        "remaining_after_allowances_bytes": 428
+      },
+      "p25-lab": {
+        "stack_bytes": 8192,
+        "static_deepest_bytes": 5292,
+        "remaining_after_allowances_bytes": 2704
+      },
+      "radio": {
+        "stack_bytes": 3072,
+        "static_deepest_bytes": 2052,
+        "remaining_after_allowances_bytes": 824
+      },
+      "ui": {
+        "stack_bytes": 2016,
+        "static_deepest_bytes": 1548,
+        "remaining_after_allowances_bytes": 272
+      },
+      "audio": {
+        "stack_bytes": 6144,
+        "static_deepest_bytes": 4324,
+        "remaining_after_allowances_bytes": 1624
+      },
+      "dmr": {
+        "stack_bytes": 2048,
+        "static_deepest_bytes": 284,
+        "remaining_after_allowances_bytes": 1568
+      },
+      "gps": {
+        "stack_bytes": 1536,
+        "static_deepest_bytes": 244,
+        "remaining_after_allowances_bytes": 1096
+      },
+      "prvTimerTask": {
+        "stack_bytes": 1024,
+        "static_deepest_bytes": 280,
+        "remaining_after_allowances_bytes": 548
+      },
+      "prvIdleTask": {
+        "stack_bytes": 576,
+        "static_deepest_bytes": 244,
+        "remaining_after_allowances_bytes": 136
+      },
+      "sys": {
+        "stack_bytes": 2048,
+        "static_deepest_bytes": 132,
+        "remaining_after_allowances_bytes": 1720
+      },
+      "ts_tx": {
+        "stack_bytes": 2048,
+        "static_deepest_bytes": 64,
+        "remaining_after_allowances_bytes": 1788
+      },
+      "ts_rx": {
+        "stack_bytes": 2048,
+        "static_deepest_bytes": 64,
+        "remaining_after_allowances_bytes": 1788
+      },
+      "rftx": {
+        "stack_bytes": 2048,
+        "static_deepest_bytes": 176,
+        "remaining_after_allowances_bytes": 1676
+      },
+      "guard": {
+        "stack_bytes": 2048,
+        "static_deepest_bytes": 44,
+        "remaining_after_allowances_bytes": 1808
+      },
+      "pa": {
+        "stack_bytes": 2048,
+        "static_deepest_bytes": 52,
+        "remaining_after_allowances_bytes": 1800
+      }
+    },
+    "library_estimates_used": true,
+    "device_measurements": false
+  },
+  "remaining": [
+    "identify/back up actual radio and establish recovery before installation",
+    "native RX complete P25 bit continuity across block phases",
+    "native TX actual half ownership, uninterrupted handoff/drain and inserted-content checks",
+    "independent mapping/deviation/shaping/clock measurements",
+    "on-device codec deadlines, stack high-water and heap measurements",
+    "bind conventional live mic/speaker/PTT and demonstrate RF RX/TX",
+    "trunk tracking next"
+  ],
+  "limitations": [
+    "Host doubles cannot prove undocumented modem behavior or physical PA-off state",
+    "Independent guard requires CPU and interrupt service; not a hung-CPU power cut",
+    "Source-calibrated lowest power and existing board RF setup retained; no P25 deviation/filter calibration asserted",
+    "Cable cannot recover a hung device or physically power-cycle it; no OEM remote-control compatibility claimed"
+  ],
+  "sources_sha256": {
+    "integration/radiofoundry/native/dm32_native.inc": "f36c47ba6fe510ca94eb3aa7b3d899b1354ef68a191200e5ef8d189801beee49",
+    "integration/radiofoundry/native/hrc_native_chip.c": "fb5af38ee082153d0bea14079fcbabc093bc353d432a522cae99ac0902a0f855",
+    "integration/radiofoundry/native/hrc_native_chip.h": "b12acdd482eed1c76157b184b5ae09ba5d0ef015c28d3b98f2c58d7c83e453d2",
+    "integration/radiofoundry/native/hrc_native_port.c": "359a03f6361b99dbe71f43b699e34a50c06c5a2daae7243ca155d94d8840f06c",
+    "integration/radiofoundry/native/hrc_native_port.h": "119025ef7a55e667a8ea449464e95751459ce57c7aeb0d57c457edeaf7bdb31a",
+    "integration/radiofoundry/native/native_lab.c": "2672f2df3612b2c9c604cf6b443e9af21b57c50d7cedbde9da8873d084b93268",
+    "integration/radiofoundry/native/native_lab.h": "304ee98acb9c92f6bda9e9a61703dfcbbb5318fb400f796207ebda596abe8cae",
+    "integration/radiofoundry/p25_lab.c": "f2ae7b449c7fa682ad9f382e8e66b480382ad9e2be31eb339aa232b9e053710d",
+    "integration/radiofoundry/p25_lab.h": "f0b3607c0e829eac704ce88f8e34ec9e54ea10a61167eb8d43df5e4a3ab1a909",
+    "src/modem/native_test.c": "5a8aa437c847409d53f445b67855633336c51f24b64ddb7d8980ea994925c584",
+    "src/modem/native_test.h": "2580498ce9eb9a24c69335db06001e0ffc830486f52db3cb993ccaae5083065e",
+    "tests/native/stubs/FreeRTOS.h": "01e0424468addeb7d4d7147d27074736bd0152c41c370379f3337008fd07d64f",
+    "tests/native/stubs/platform.h": "201103a69fb9290a0029d2deb153953e8a6d168d13e3aaad4903672dd6201e5d",
+    "tests/native/stubs/task.h": "f9c21d390b69e7384850321b2acddc1849149af5585db7554fb21263604814ee",
+    "tests/native/test_lab.c": "62fbb70267c16ca51f7c3a06c215b06b47514c90e6b479dc01cef9dc8412cb14",
+    "tests/native/test_native.c": "1e9762797cc21f871982f3f3d4dd1097af3f5c750b649d927231a0a9a2af72c8",
+    "tests/native/test_port.c": "01accc0ca9053c034972c1ba8d42ef51973679787c9a8ee4eaa679d61641d567",
+    "tests/test_native_client.py": "0003a393ead2db68b6b3f37e4a15ae514d8954a3876d673153f5b08a2e48068e",
+    "tools/build_radiofoundry.py": "78cf7899b751e08337e1d11dd0062c59907ebbf2d6ac406d2c772d8d5d25772e",
+    "tools/native_modem.py": "99587c79d353b8e520d6e26a2c02723dbebb79f6d293812b666ba027102b57c0",
+    "tools/test_native_modem.py": "a2afe128cb01db1ff56a702bdddcba6ef6a1bc7df9e43a3e8a7f85d0bba8cf4d"
+  },
+  "logs_sha256": {
+    "logs/native-host-tests.log": "f14e310d084c698a23c6f3e20ab5c05c1e076504bf5b21a451e968c99db69aa8",
+    "logs/native-python-regression.log": "4d0f9e085668d8e304870cd3c09bdd7e40616193fe8c66307f1d4e19a8e39762",
+    "logs/native-voice-regression.log": "2d5d71392533c60a25cfdfef0a7bdf85c4f6c1d4d61264dcbf3b5c5e0ba5186b",
+    "logs/radiofoundry-p25-native.log": "387b0c12ae328c17239c1c0fd63370622cd400400905052fb68fae15a9a6a86a",
+    "logs/radiofoundry-stack-native.log": "edb631d60e5a8e73126312bbbe96e6ad1f494610a32e2d0789ef94ff6173b148",
+    "logs/radiofoundry-p25-lab.log": "ebfcb43cf85dfe2e8ec455dd231049b1e9733fe52a4600a45fc945601730dbfd",
+    "logs/radiofoundry-stack-lab.log": "8d6418745212f1fe16fbb1db8eacd1737e3d27e2800e8aa08dd1e035e9b9c3e5",
+    "logs/radiofoundry-p25-off.log": "0f49f8d66e7dc7229ce0544ee9a0f6c1dffba8d2b4f0c45f0503a41fbd8d970f",
+    "logs/radiofoundry-stack-off.log": "906e57fc5367147ce64b69f7a5c8c977863eece67194a9f7d2a58caabc26add9",
+    "logs/radiofoundry-rebuild-native.log": "34fb2f627826888ce512d9506808d374abd0e67edf52f0d6b2b0a2a06ad6534e"
+  },
+  "notes": "docs/native-modem-tests.md"
+}

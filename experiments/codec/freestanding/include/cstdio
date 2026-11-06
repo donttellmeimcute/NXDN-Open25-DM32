@@ -1,0 +1,2 @@
+/* Legacy source includes this even after bounded fault handling replaces IO. */
+extern "C" int printf(const char *, ...);

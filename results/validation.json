@@ -1,0 +1,288 @@
+{
+  "date": "2026-10-26",
+  "status": "software-validated, hardware-unverified, no flashable P25 release candidate",
+  "hardware": {
+    "radio_available": false,
+    "confirmed_by_user": true,
+    "installed_firmware": null,
+    "serial_or_RF_operations_performed": false,
+    "device_flash_operations_performed": false
+  },
+  "analysis_target": {
+    "schema": 1,
+    "target_id": "dm32-01-01-049-public",
+    "status": "static-analysis target only; physical hardware revision unverified",
+    "upstream_url": "https://github.com/M7OCM/DM-32UV/blob/DM-32UV-Firmware-(most-common)/DM32.01.01.049.bin",
+    "mirror_url": "https://github.com/rogerclarkmelbourne/DM32/blob/4b2185944a85a578ae33626922b763db6256533e/M7OCM/branches/DM-32UV-Firmware-(most-common)/DM32.01.01.049.bin",
+    "local_image": "research/originals/DM32.01.01.049.bin",
+    "family": "DM32.01.*",
+    "version": "DM32.01.01.049",
+    "image_size": 869688,
+    "image_sha256": "03107b6f600e7fa95105af8324cff349c0f17fe30db249c14d11e79baa8da97a",
+    "container": {
+      "marker": "BFUV32-V2",
+      "header_size": 256,
+      "last_header_bytes": "END"
+    },
+    "payload_size": 869432,
+    "payload_sha256": "97106fc968c848d552a5ee906cc81173e49fd7069fec21d85af631e1cb2e70e5",
+    "verified_application_flash_offset": null,
+    "verified_erase_ranges": null,
+    "release_candidate": false
+  },
+  "pristine_inputs": {
+    "repositories": 10,
+    "direct_downloads": 7,
+    "verification_log": "logs/source-verification.log"
+  },
+  "firmware_map": {
+    "anchors": 51,
+    "startup_memory_map": "artifacts/map-049/memory-map.json",
+    "map": "docs/modem-map.csv"
+  },
+  "host_guards": {
+    "tests": 28,
+    "result": "passed",
+    "log": "logs/host-tools-tests.log",
+    "coverage": "image/patch identity/range; payload checksums; fragmented/truncated reads; atomic partial backup; probe pin; aliased backup rejection; ordered transcript; ACK-before-execute"
+  },
+  "protocol": {
+    "reference_op25_commit": "3f44d43eb449bb4753247ce848bb42a403823dea",
+    "random_seed": 9522,
+    "hardware_verified": false,
+    "nid": {
+      "all_nac_voice_duid_vectors": 20480,
+      "random_0_to_11_error_vectors": 1000
+    },
+    "rs": {
+      "p25craft_encode_and_ezpwd_decode_vectors": 4200
+    },
+    "imbe": {
+      "op25_channel_encode_decode_random_vectors": 1000
+    },
+    "interleave": {
+      "op25_interleave_positions": 1296
+    },
+    "frames": {
+      "full_frame_p25craft_vectors": 250,
+      "fixtures": [
+        {
+          "path": "tests/protocol/vectors/nac293-hdu.bin",
+          "bytes": 99,
+          "sha256": "d7fb860af9c9b98d1b713c72557faf01c51822e1db2276fb5cc1da12cdce0c7c"
+        },
+        {
+          "path": "tests/protocol/vectors/nac293-ldu1.bin",
+          "bytes": 216,
+          "sha256": "1f300a2c0684bdfe318f0e43b6358ac61871c1d588f46ce622c9e55148b87f94"
+        },
+        {
+          "path": "tests/protocol/vectors/nac293-ldu2.bin",
+          "bytes": 216,
+          "sha256": "db077c413d6c60bb2b4bce4fcb3a2738105fef7d5c7f6501e730b4feab966eb8"
+        },
+        {
+          "path": "tests/protocol/vectors/nac293-tdu.bin",
+          "bytes": 18,
+          "sha256": "3cebb9f87381c350174490957cdac26f6e6bc707fa3595b9d88a83f0b1ff4b7e"
+        },
+        {
+          "path": "tests/protocol/vectors/nac293-tdulc.bin",
+          "bytes": 54,
+          "sha256": "bf3d726b8cae45fce774823b3d8b2a737daa809cb67f7c549ffaf0de8747d4dc"
+        }
+      ]
+    },
+    "stream": {
+      "stream_cases": [
+        "normal",
+        "inverted",
+        "wrong_nac",
+        "truncated_reacquisition",
+        "two_sync_errors",
+        "invalid_dibit"
+      ]
+    },
+    "damage": {
+      "damaged_metadata_cases": 7,
+      "encrypted_audio_flag": "clear_voice_false",
+      "invalid_lengths_and_sync": "rejected"
+    },
+    "status": "passed"
+  },
+  "protocol_sanitizers": {
+    "result": "passed",
+    "arbitrary_nids_dibits": 100000,
+    "damaged_ldus": 3000,
+    "log": "logs/full-test.log"
+  },
+  "codec_sanitized_synthetic": {
+    "platform": "host-only; no CK803S or RF timing claim",
+    "frames": 2000,
+    "pcm_sample_rate": 8000,
+    "frame_duration_us": 20000,
+    "state_bytes": 5736,
+    "context_capacity_bytes": 8192,
+    "upstream_pack_matches": 2000,
+    "mbelib_harmonic_and_band_matches": 2000,
+    "mbelib_voicing_matches": 2000,
+    "max_fundamental_frequency_error_radians": 2.23215e-08,
+    "shifted_u7_pitch_mismatches": 1641,
+    "mbelib_error_strings": 0,
+    "fixed_nonzero_samples": 305824,
+    "mbelib_nonzero_samples": 319234,
+    "encode_host_microseconds": {
+      "min": 156.583,
+      "mean": 334.396,
+      "median": 239.5,
+      "p99": 741.791,
+      "max": 1183.29
+    },
+    "decode_host_microseconds": {
+      "min": 35.584,
+      "mean": 83.0617,
+      "median": 54.917,
+      "p99": 225.167,
+      "max": 334.708
+    },
+    "negative_pitch_and_width_checks": "pass",
+    "saturation_large_shift_and_division_fault_checks": "pass",
+    "independent_op25_debug_vector_frames": 100,
+    "random_payload_checks": {
+      "decoded": 8105,
+      "reserved_muted": 1895,
+      "arithmetic_faults_muted": 0
+    },
+    "heap_in_codec_path": false,
+    "rf_or_radio_validation": false
+  },
+  "codec_sanitized_pipeline": {
+    "test": "host PCM -> full IMBE encoder -> CAI HDU/LDU1/LDU2/TDU -> dibit stream -> frame decode -> fixed and independent mbelib decoders",
+    "nac": 659,
+    "source_id": 1,
+    "talkgroup": 1,
+    "speech_frames": 2000,
+    "padded_imbe_frames": 2007,
+    "ldus": 223,
+    "complete_stream_frames": 225,
+    "mbelib_rejected": 0,
+    "fixed_nonzero_samples": 306765,
+    "mbelib_nonzero_samples": 320340,
+    "radio_or_rf_test": false
+  },
+  "codec_reproducibility": {
+    "recorded_utc": "2026-10-26T16:29:55.771872+00:00",
+    "method": "Two separate build.py --target --out directories, specific generated path maps and GNU ar rcsD",
+    "directories": [
+      "experiments/codec/out/repro-a",
+      "experiments/codec/out/repro-b"
+    ],
+    "files": {
+      "libdm32_imbe.a": {
+        "sha256": "18d6ce5c772472f44f57380c05ecfcdad04e9eaf41241be6344c1cabef612c3a",
+        "bytes": 383090,
+        "bit_identical": true
+      },
+      "codec-all.o": {
+        "sha256": "49172958f17f1d6e4d42daebfc662c8b4b6ce874fb492efbdf28a237e0e05c1d",
+        "bytes": 339296,
+        "bit_identical": true
+      }
+    },
+    "scope": "codec objects/archive only; not a whole firmware build or a hardware test"
+  },
+  "modem_and_helper_tests": {
+    "tests": 17,
+    "result": "passed",
+    "all_command_routes": 256,
+    "malformed_headers": 131070,
+    "log": "logs/full-test.log"
+  },
+  "memory_runtime": {
+    "independent_libc_checks": 338688,
+    "sanitizers": "AddressSanitizer+UndefinedBehaviorSanitizer",
+    "result": "passed",
+    "log": "logs/full-test.log"
+  },
+  "target_components": {
+    "kind": "relocatable software components; not executable radio firmware",
+    "hardware_verified": false,
+    "sha256": "8cfa6b2f86f3ebfae09f7ec552ba5b844c2aa2884b71be61d4bb2348d83c6e50",
+    "size": "   text\t   data\t    bss\t    dec\t    hex\tfilename\n  34072\t      0\t     12\t  34084\t   8524\tartifacts/p25-codec-ck803s.relocatable.o\n",
+    "unresolved_symbols": [],
+    "limitations": [
+      "No RF/modem/audio/interrupt/PTT driver integration",
+      "No verified free stock memory placement",
+      "No target execution/performance measurements",
+      "No flash layout/erase-boundary validation"
+    ]
+  },
+  "ram_probe": {
+    "kind": "ram-diagnostic-only",
+    "hardware_verified": false,
+    "load_address": 65536,
+    "entry_address": 65536,
+    "length": 435,
+    "sha256": "d3e9f7f0c58a91c701ff8d36d24cf2ef02e946f338169ec61bc753806ed4201a",
+    "cpu": "ck803s",
+    "endianness": "little",
+    "abi": "C-SKY ABIv2",
+    "compiler": "14.3.0",
+    "flags": [
+      "-mcpu=ck803s",
+      "-mlittle-endian",
+      "-msoft-float",
+      "-Os",
+      "-ffreestanding",
+      "-fno-builtin",
+      "-fno-stack-protector",
+      "-fno-pic",
+      "-fstack-usage",
+      "-Wall",
+      "-Wextra",
+      "-Werror"
+    ],
+    "flash_writes": false,
+    "rf_writes": false,
+    "expected_output": "DM32-RAM-PROBE/1\\r\\ncrc16=000031c3\\r\\nbyte0=00000078\\r\\nwork_mode=<8 hex digits>\\r\\nDONE; power-cycle to restore normal boot\\r\\n",
+    "precondition": "Complete verified original backups first; read docs/recovery.md."
+  },
+  "readonly_helper": {
+    "source_sha256": "59de726d5a50cf17573d35e98d183a184d3cc5da81ca30e198fb061cd3ee0f46",
+    "patched_sha256": "8d316eff7b2be89745162da739cecc8334e2befcd278fa6748bff44cc6bfde42",
+    "hardware_verified": false,
+    "whole_binary_formally_verified": false,
+    "evidence": "artifacts/modem/readonly-helper/"
+  },
+  "no_candidate_reason": [
+    "Native continuous P25 RX and compliant TX have not been measured",
+    "RF/audio/PTT and protection integration is incomplete",
+    "No physical unit identity, original backup or erase/readback layout is verified",
+    "No on-target codec timing/stack results",
+    "No independent live-voice or standalone tests"
+  ],
+  "completion_tests": {
+    "live_RX_speaker": "unperformed",
+    "live_TX_microphone": "unperformed",
+    "standalone_battery": "unperformed",
+    "native_band_RF": "unperformed",
+    "repeated_operation": "unperformed",
+    "RF_protocol_measurements": "unperformed",
+    "deployment_and_restore": "unperformed"
+  },
+  "next_test": "Identify exact radio and flash chips; prove read path and preserve two complete original dumps plus codeplug before RAM/RF experiments.",
+  "codec_generated_speech": {
+    "test": "host PCM -> full IMBE encoder -> CAI HDU/LDU1/LDU2/TDU -> dibit stream -> frame decode -> fixed and independent mbelib decoders",
+    "nac": 659,
+    "source_id": 1,
+    "talkgroup": 1,
+    "speech_frames": 700,
+    "padded_imbe_frames": 702,
+    "ldus": 78,
+    "complete_stream_frames": 80,
+    "mbelib_rejected": 0,
+    "fixed_nonzero_samples": 109274,
+    "mbelib_nonzero_samples": 112166,
+    "radio_or_rf_test": false
+  }
+}
