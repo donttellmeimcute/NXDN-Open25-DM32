@@ -70,7 +70,7 @@ int main(void)
         for (unsigned block=0;block<201;block++) {
             clock_us+=30000;
             assert(native_lab_live_poll(local_sid,&state,&reason,&queued) && state==NT_TX);
-            nt_boundary(live,NT_IRQ_TX_SLOT,clock_us);
+            nt_boundary(live,NT_IRQ_PHY,clock_us);
             if (!block && call_no==2) {
                 nt_rf_tx(live,clock_us+1000);
                 nt_pa_ready(live,clock_us+29000);
@@ -80,7 +80,7 @@ int main(void)
         ptt.arg=NATIVE_PHYSICAL_PTT_UP;
         assert(native_lab_request(&sm,&ptt) && live_release==call_no);
         assert(native_lab_live_block(local_sid,raw,1) && !native_lab_live_block(local_sid,raw,0));
-        for (unsigned block=0;block<3;block++) { clock_us+=30000;nt_boundary(live,NT_IRQ_TX_SLOT,clock_us); }
+        for (unsigned block=0;block<3;block++) { clock_us+=30000;nt_boundary(live,NT_IRQ_PHY,clock_us); }
         assert(live->state==NT_DRAIN);
         clock_us+=50000;native_lab_service(&sm,clock_us);
         assert(live->reason==NT_TX_COMPLETE && native_lab_voice_release(local_sid));

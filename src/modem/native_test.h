@@ -15,7 +15,10 @@
 enum { NT_BYTES=36, NT_RX_CAP=16, NT_TX_CAP=8, NT_MAX_BLOCKS=60,
        NT_MAX_MS=2000, NT_MIN_LEASE_MS=100, NT_MAX_LEASE_MS=500,
        NT_SLOT_US=30000, NT_START_US=100000, NT_STALL_US=60000,
-       NT_DRAIN_US=45000, NT_STATUS_WORDS=37, NT_SNAPSHOT_WORDS=56 };
+       NT_DRAIN_US=45000, NT_STATUS_WORDS=37, NT_SNAPSHOT_WORDS=56,
+       /* The TX-slot vector follows its slot's PHY_RDY by about 0.44 ms.
+        * Later than this, that PHY_RDY (and its handoff) was lost. */
+       NT_TX_SLOT_LAG_US=20000 };
 #if defined(CONFIG_DEV_TX) && CONFIG_DEV_TX
 enum { NT_TX_STORAGE_CAP=28, NT_TX_PRELOAD_MS=1000 };
 #else
@@ -27,6 +30,8 @@ enum { NT_OK, NT_USER_STOP, NT_RX_LIMIT, NT_TX_COMPLETE, NT_RX_DURATION,
        NT_LEASE, NT_DEADLINE, NT_STALLED, NT_LATE, NT_EARLY, NT_UNDERRUN,
        NT_IO, NT_RX_OVERFLOW, NT_ABNORMAL, NT_DENIED, NT_INTERRUPTED,
        NT_RESTORE, NT_UNEXPECTED_RF };
+/* Interrupt sources. Only NT_IRQ_PHY hands TX blocks to the modem; the slot
+ * vectors are supervision (docs/native-modem-tests.md, TX handoff). */
 enum { NT_IRQ_PHY, NT_IRQ_TX_SLOT, NT_IRQ_RX_SLOT };
 typedef struct nt_config {
     uint32_t frequency_hz;

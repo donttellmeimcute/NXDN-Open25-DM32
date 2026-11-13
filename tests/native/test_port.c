@@ -45,7 +45,9 @@ int main(void)
     assert(nt_arm(&test,&c,1));assert(nt_load(&test,test.session,0,raw));assert(nt_load(&test,test.session,1,raw));
     assert(nt_begin(&test,test.session,0));assert(period==1000 && mock_tmr[6]==3 && !depth);
     assert(!hn_port_on(&chip,&test));
-    clock_us=1000;hrc_irq_table[IRQ_MODEM_TS_TX]();assert(test.stats.tx_sent==1);
+    clock_us=500;hrc_irq_table[IRQ_MODEM_TS_TX]();assert(!test.stats.tx_sent); /* slot vectors never hand over */
+    regs[C7_SYS_INTERP_LIST/4]=1u<<12;
+    clock_us=1000;hrc_irq_table[IRQ_MODEM_SYS]();assert(test.stats.tx_sent==1);
     hrc_irq_table[IRQ_MODEM_RF_TX]();assert(test.key_requested);
     hrc_irq_fn delayed_pa=hrc_irq_table[IRQ_TIMER3];
     /* No cable command or radio-task service: the real timer ISR expires it. */
@@ -64,25 +66,28 @@ int main(void)
     assert(nt_arm_live(&test,145500000));
     assert(nt_load(&test,test.session,0,raw) && nt_load(&test,test.session,1,next));
     assert(nt_load(&test,test.session,2,raw) && nt_begin(&test,test.session,clock_us));
+    /* The traced order: PHY_RDY, then the TX-slot vector 0.44 ms later. The
+     * block goes to both TX RAM halves in PHY_RDY, before the head fetch. */
     regs[C7_SYS_INTERP_LIST/4]=1u<<12;
     clock_us=329200;hrc_irq_table[IRQ_MODEM_SYS]();
-    assert(!test.stats.tx_sent && regs[C7_LAYER2_TXRX_CTRL/4]==0);
-    clock_us=332800;hrc_irq_table[IRQ_MODEM_TS_TX]();
     assert(test.stats.tx_sent==1 && regs[C7_LAYER2_TXRX_CTRL/4]==0x80);
+    assert(!memcmp(buf,raw,36) && !memcmp(buf+36,raw,36));
+    clock_us=329640;hrc_irq_table[IRQ_MODEM_TS_TX]();
+    assert(test.stats.tx_sent==1 && test.state==NT_TX);
     hrc_irq_table[IRQ_MODEM_RF_TX]();assert(test.key_requested);
     regs[C7_LAYER2_TXRX_CTRL/4]=0; /* fake the hardware consuming the send strobe */
     clock_us=333000;hrc_irq_table[IRQ_MODEM_SYS]();
-    assert(!memcmp(buf,raw,36)); /* same-slot event must not replace active payload */
+    assert(!memcmp(buf,raw,36) && regs[C7_LAYER2_TXRX_CTRL/4]==0); /* same-slot event must not replace active payload */
     clock_us=359200;hrc_irq_table[IRQ_MODEM_SYS]();
-    assert(test.stats.tx_sent==1 && regs[C7_LAYER2_TXRX_CTRL/4]==0);
-    assert(!memcmp(buf,next,36) && !memcmp(buf+36,next,36));
-    clock_us=362800;hrc_irq_table[IRQ_MODEM_TS_TX]();
     assert(test.stats.tx_sent==2 && regs[C7_LAYER2_TXRX_CTRL/4]==0x80);
-    clock_us=392800;hrc_irq_table[IRQ_MODEM_TS_TX](); /* no PHY advance */
-    assert(test.state==NT_FAULT && test.reason==NT_IO && test.stats.tx_sent==2);
+    assert(!memcmp(buf,next,36) && !memcmp(buf+36,next,36));
+    clock_us=359640;hrc_irq_table[IRQ_MODEM_TS_TX]();
+    assert(test.stats.tx_sent==2 && test.state==NT_TX);
+    clock_us=389640;hrc_irq_table[IRQ_MODEM_TS_TX](); /* its PHY_RDY at 389,200 was lost */
+    assert(test.state==NT_FAULT && test.reason==NT_LATE && test.stats.tx_sent==2);
     assert(regs[C7_LAYER2_TXRX_CTRL/4]==0 && nt_cleanup(&test));
     uint32_t trace[NT_TRACE_WORDS];nt_trace_summary(trace);
-    assert(trace[0]==2 && trace[24]==359200 && trace[25]==1);
+    assert(trace[0]==2 && trace[24]==329200 && trace[25]==2);
     puts("PASS real native interrupt port: timer conflicts, independent lease shutdown, delayed PA, exact handler/mask restoration");
     return 0;
 }

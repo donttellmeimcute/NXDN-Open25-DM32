@@ -17,6 +17,8 @@ typedef struct {
     void (*unlock)(void *, uint32_t);
 } hn_hooks;
 enum { HN_REGS=15, HN_DIAG_REGS=24 };
+/* LAYER2_TXRX_CTRL b23 RX and b22 TX slot sync release (upstream hrc7000_bs.c). */
+#define HN_TXRX_SYNC_RELEASE 0xc00000u
 typedef struct {
     hrc7000_t *modem;
     const hn_hooks *hooks;
@@ -24,9 +26,6 @@ typedef struct {
     uint32_t saved[HN_REGS];
     uint32_t last_event,last_us,last_sys,last_type,last_sys_us;
     uint32_t event_regs[HN_DIAG_REGS];
-#if CONFIG_DEV_TX
-    uint32_t staged_index;
-#endif
     uint8_t prepared, saved_valid;
 } hn_chip;
 void hn_init(hn_chip *, hrc7000_t *, const hn_hooks *, nt_ops *);
