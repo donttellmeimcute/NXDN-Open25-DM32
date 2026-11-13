@@ -33,7 +33,62 @@ def git(path, *args):
     return subprocess.check_output(["git", "-C", str(path), *args], text=True).strip()
 
 
+# Generated content is staged first: transforms, copied sources, then the
+# patch series in integration/radiofoundry/patches (applied in name order to
+# the staged text, or to the pristine file). flush() writes everything once.
+PATCHES = ROOT / "integration/radiofoundry/patches"
+STAGE = {}
+
+
 def write_owned(path, content, original=None):
+    key = str(path.relative_to(DEST))
+    previous = STAGE.get(key)
+    STAGE[key] = (content, previous[1] if previous else original)
+
+
+def staged(path):
+    return STAGE[str(path.relative_to(DEST))][0]
+
+
+def patch_targets(patch):
+    names = []
+    for line in patch.read_text().splitlines():
+        if line.startswith("+++ "):
+            name = line[4:].split("\t")[0]
+            if name != "/dev/null":
+                names.append(name[2:] if name.startswith("b/") else name)
+    return names
+
+
+def apply_patches(limit=None):
+    """Apply the series (names sorted; stop before `limit`) to the staged tree."""
+    import tempfile
+    for patch in sorted(PATCHES.glob("*.patch")):
+        if limit is not None and patch.name >= limit:
+            break
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            targets = patch_targets(patch)
+            for key in targets:
+                base = STAGE[key][0] if key in STAGE else (UP / key).read_bytes() if (UP / key).exists() else None
+                if base is not None:
+                    (tmp / key).parent.mkdir(parents=True, exist_ok=True)
+                    (tmp / key).write_bytes(base)
+            result = subprocess.run(["patch", "-p1", "-s", "-f", "--no-backup-if-mismatch", "-d", str(tmp), "-i", str(patch)],
+                                    capture_output=True, text=True)
+            if result.returncode:
+                raise SystemExit(f"Patch does not apply: {patch.name}\n{result.stdout}{result.stderr}")
+            for key in targets:
+                original = STAGE[key][1] if key in STAGE else (UP / key).read_bytes() if (UP / key).exists() else None
+                STAGE[key] = ((tmp / key).read_bytes(), original)
+
+
+def flush():
+    for key, (content, original) in sorted(STAGE.items()):
+        _write_file(DEST / key, content, original)
+
+
+def _write_file(path, content, original=None):
     key = str(path.relative_to(DEST))
     if (path.exists() and path.read_bytes() not in (content, original) and
         hashlib.sha256(path.read_bytes()).hexdigest() != OWNED.get(key)):
@@ -54,7 +109,7 @@ def transform(relative, replacements):
     write_owned(DEST / relative, content.encode(), original)
 
 
-def prepare():
+def prepare(write=True, apply_series=True, limit=None):
     if not UP.exists():
         run(["git", "clone", "--no-checkout", "https://github.com/RadioFoundry/RadioFoundry", UP])
         run(["git", "-C", UP, "checkout", "--detach", PIN])
@@ -118,7 +173,7 @@ def prepare():
     ])
     # Append board glue while preserving ownership checks on generated files.
     board_path=DEST / "boards/dm32/radio_dm32.c"
-    board_body=board_path.read_bytes()
+    board_body=staged(board_path)
     write_owned(board_path,board_body+b'\n#include "dm32_native.inc"\n',board_body)
     transform("platform/hrc7000/gpio.c", [
         ('#include "platform.h"', '#include "platform.h"\n#include "config.h"'),
@@ -194,6 +249,11 @@ def prepare():
         "Not an upstream MIT-only contribution. See COPYING-P25 and source manifest.\n"
         "Hardware-unverified. Bounded native-PHY tests; no operational P25 voice mode.\n"
     ).encode())
+    if apply_series:
+        apply_patches(limit)
+    if not write:
+        return
+    flush()
     OWNED_FILE.write_text(json.dumps(OWNED, indent=2) + "\n")
     changed=subprocess.check_output(["git","-C",str(DEST),"diff","--name-only","-z","HEAD"]).decode().split("\0")
     extra=subprocess.check_output(["git","-C",str(DEST),"ls-files","--others","--exclude-standard","-z"]).decode().split("\0")
