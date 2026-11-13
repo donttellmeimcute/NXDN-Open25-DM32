@@ -1,5 +1,64 @@
 # DM-32 conventional P25 progress
 
+## 2026-11-13 Phase 1: P25 conventional channels, TX handoff fix
+
+**TX handoff.** Blocks now go to TX RAM only in the PHY_RDY interrupt, the first
+of each slot, as RadioFoundry's measured DMR BS driver does; the TX-slot vector
+(0.43-0.45 ms later in the 2026-11-06 traces) only supervises, and one that
+arrives a slot after the last PHY_RDY stops the run instead of sending a mixed
+block. TX start writes no block or send bit. Leaving a session releases both
+slot syncs (aimed at the silent call after a received call; unverified).
+`tests/native/test_tx_handoff.c` models the traced timing: the old write point
+reproduces the head lag (every head symbol from the previous block, every block
+recovered by substituting three bytes); the real driver puts every block on the
+model's air byte-exact with alternating or fixed halves and ±300 µs jitter.
+`tools/tx_trace_replay.py` compares a saved trace with demodulated I/Q.
+
+**P25 channels.** Mode byte 2 in the codeplug (`open-firmware-cps.md` 7.3.3.1):
+RX/TX NAC, talkgroup, unit ID (channel ID override or the radio's DMR ID), hear
+all groups. Editable in the web Codeplug Editor (grid and form), `channels.csv`
+and the radio's channel editor; the home screen shows mode, talkgroup, NAC,
+caller ID, emergency and encrypted calls. The radio core runs the channel
+through `radio_dv.h` like DMR: TX inhibit, RX only, band limits, calibrated
+power, battery, time-out (terminator then "time-out"), busy lockout by NAC
+(Carrier: any frames; Wrong tone: another NAC), missing ID/talkgroup refused,
+immediate unkey on faults, zone scan stops on our NAC. The laboratory gate
+(145.500 MHz, lowest power, cable enable per boot) remains as `CONFIG_DEV_TX`.
+Details: `docs/p25-channels.md`. Upstream changes are now a patch series
+(`integration/radiofoundry/patches`, `tools/rf_patch.py`).
+
+**Independent validation.** dsd-fme (pinned, built by
+`tools/build_validators.sh`) decodes the firmware's transmit chain run on the
+host: 36/36 frames of a 6 s call, our NAC/talkgroup/source, 300/300 IMBE frames
+equal to our encoder's parameters with no FEC corrections, also at 12 dB SNR
+(`docs/validation.md`, `results/p25-validation.json`).
+
+**Measured** (linker region totals; `results/phase1-p25.json`):
+
+| Preset | Flash | Δ vs Phase 0 | Main RAM | Δ | RAM free |
+|---|---:|---:|---:|---:|---:|
+| native | 445,012 | +7,668 | 190,384 | +1,288 | 21,072 |
+| lab (`--disable-native`) | 432,024 | +2,528 | 184,408 | +912 | 27,048 |
+| P25 off | 393,488 | +2,412 | 160,544 | +904 | 50,912 |
+| native lean | 443,256 | +20,612 | 187,968 | +5,384 | 23,488 |
+| TX bench (lab gate) | 472,472 | +4,424 | 196,032 | +880 | 15,424 |
+
+The lean preset grows most because it can now transmit: the encoder worker
+stack (8 KiB) and its heap reservation replace the 4 KiB receive-only ones.
+With P25 off the channel fields and view cost about 900 bytes of RAM. All
+presets build with zero warnings; the native forced rebuild is byte-identical;
+every task fits its stack (least margin: idle task, 136 bytes, unchanged).
+
+Tests: 106 Python, protocol + sanitizers, voice, native (8 suites incl. the
+handoff model), first-boot, receive audio, modem tooling, the RadioFoundry
+host suite (`radioCoreTestP25` 2,186 checks, `codeplugTest`, UI flow and the
+4,563-screen layout check), 556 site tests (record, CSV).
+
+**Not verified in hardware:** the PHY_RDY handoff on air, slot-sync release,
+RX/TX switching time on PTT, the waveform/deviation/calibrated power in P25,
+busy lockout timing, scan stops, the UI on the display, the editor/CSV with a
+real radio. `docs/hil-checklist.md` (Phase 4) will list the steps.
+
 ## 2026-11-13 Phase 0 baseline (multi-mode fork)
 
 Goal of this fork: one image with FM, DMR, conventional P25 Phase 1, NXDN48

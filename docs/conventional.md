@@ -2,6 +2,10 @@
 
 # Conventional Phase 1 integration — 2026-11-05
 
+**Update 2026-11-13:** P25 is now a channel mode run by the radio core with the radio's normal TX rules; the
+laboratory worker below became that channel's service. See [p25-channels.md](p25-channels.md). This page keeps the
+November 5 design record.
+
 Scope: FDMA CAI, conventional clear group voice, half-duplex subscriber-side
 audio/framing; RadioFoundry DM32 development derivative. Trunk tracking is the
 next stage. No radio was connected. There is no operational P25 RF mode yet.

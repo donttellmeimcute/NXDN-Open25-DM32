@@ -32,6 +32,8 @@ You can also help by reviewing the modem or P25 code, contributing reproducible 
 ## Developer resources
 
 - [Build and test guide](docs/build.md)
+- [P25 conventional channels](docs/p25-channels.md)
+- [Independent validation](docs/validation.md)
 - [P25 framing, error correction, and synthetic test vectors](docs/protocol.md)
 - [Modem research and RF test criteria](docs/modem.md)
 - [Hardware validation and recovery](docs/hardware-tests.md)
