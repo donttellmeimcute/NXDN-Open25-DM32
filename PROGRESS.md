@@ -1,5 +1,45 @@
 # DM-32 conventional P25 progress
 
+## 2026-11-13 Phase 4: one image with every mode, resources, hardware checklist, user guide
+
+**One image.** The default build carries FM, DMR, P25 conventional, NXDN48 and P25 trunking (receive), and the
+Phase 2 layer. `--trunk-tx` adds trunked transmit.
+
+| Build | Flash | RAM | Free RAM |
+|---|---:|---:|---:|
+| All modes, receive-only trunking (default) | 466,576 (51.8 %) | 194,432 | 17,024 |
+| All modes, trunked transmit | 468,004 | 195,184 | 16,272 |
+
+Both build with zero warnings. Every switch also builds on and off. The static stack check passes for every task;
+the least margin is the idle task's 136 bytes, unchanged.
+
+**Real time** (`tools/rt_budget.py`, `results/rt-budget.json`). Host instruction counts per deadline unit
+(callgrind) are converted to CK803S time with the on-radio IMBE encode average (13.0 ms per 20 ms frame,
+0.843 cycles per host instruction). Cross-check: the IMBE decode estimate is 11.5 ms on average; the radio measured
+a 12.2 ms peak.
+
+| Mode | CPU |
+|---|---:|
+| P25 TX | 65 % (on the radio: 18.6 ms peak per 20 ms) |
+| P25 RX | 59 % |
+| Trunk on the control channel | 2.5 % |
+| Trunk following a call | 59.5 % (+0.6 % for the tap) |
+| NXDN RX / TX | 1.0 % / 0.7 %, plus the stock AMBE+2 vocoder at DMR's rate |
+
+Modes never run at once. **It fits; no switch has to go.** [resources.md](docs/resources.md) gives the order to
+drop switches if more margin is ever needed: lean, then Phase 2, then trunked transmit, then NXDN.
+
+**Docs.**
+- [hil-checklist.md](docs/hil-checklist.md): backup and calibration first, then install and health, FM/DMR
+  regression, P25, NXDN (with the flat-path measurements first), trunk receive, trunk transmit (authorized system
+  or lab only), resources on the radio, and restore.
+- [user-guide.md](docs/user-guide.md): channel modes, fields, screens, trunking behavior and limits.
+
+**Not verified in hardware:**
+- Everything from Phases 1-3 that is listed there.
+- The real-time figures, which are estimates from one on-radio calibration point.
+- The AMBE+2 vocoder's share in NXDN.
+
 ## 2026-11-13 Phase 3: P25 trunking (Phase 1 control channel, FDMA voice, Phase 2 above the PHY)
 
 **Control channel.** `src/p25t/tsbk.c`: TSBK CRC, the rate 1/2 trellis code with a full Viterbi decoder, the
