@@ -1,3 +1,18 @@
+--- a/core/radio/radio.h
++++ b/core/radio/radio.h
+@@ -193,7 +193,12 @@
+ 	uint16_t last_talkgroup;
+ 	uint32_t last_source;
+ 	uint32_t last_ms;	// hal_millis() of its end, 0 = none
++	// P25 trunking channels: where the radio is on the system (radio_dv_trunk_t) and whether the system took it
++	uint8_t trunk;
++	bool trunk_registered;
+ } radio_dv_view_t;
++// The trunking states, in the order the trunking logic numbers them (core/p25t/su.h)
++typedef enum { RDV_TRUNK_HUNT, RDV_TRUNK_SITE, RDV_TRUNK_CALL, RDV_TRUNK_REQUEST, RDV_TRUNK_QUEUED, RDV_TRUNK_TALK } radio_dv_trunk_t;
+ 
+ #if CONFIG_DMR_ROAMING
+ #define RADIO_ROAM_SITES	16	// = ROAM_SITES_MAX (radio/roam.h)
 --- a/core/radio/radio_sm.c
 +++ b/core/radio/radio_sm.c
 @@ -842,7 +842,8 @@
@@ -47,6 +62,18 @@
  		}
  		if (ch->mode == RADIO_MODE_NXDN && dv_unit_id(ch) > NXDN_UNIT_MAX) {
  			return TXDENY_NO_ID;		// NXDN unit IDs are 16 bits, 1-65519: set the channel's own ID
+@@ -1006,6 +1014,11 @@
+ 	radio_dv_status(&s, now_ms);
+ 	if (s.active != v->active) {
+ 		v->active = s.active;
++		changed(sm);
++	}
++	if (sm->view.ch.mode == RADIO_MODE_P25_TRUNK && (s.trunk_state != v->trunk || s.trunk_registered != v->trunk_registered)) {
++		v->trunk = s.trunk_state;
++		v->trunk_registered = s.trunk_registered;
+ 		changed(sm);
+ 	}
+ 	if (sm->view.state == RS_TX) {
 --- a/tests/host/radioCoreTest.c
 +++ b/tests/host/radioCoreTest.c
 @@ -4664,7 +4664,9 @@
