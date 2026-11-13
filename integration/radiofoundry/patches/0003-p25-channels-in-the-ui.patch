@@ -1,0 +1,738 @@
+--- a/core/ui/ui_screens.c
++++ b/core/ui/ui_screens.c
+@@ -242,7 +242,96 @@
+ // The mode word: AM where an FM channel or the VFO is received in AM (the air band)
+ static const char *mode_word(const radio_view_t *v)
+ {
+-	return v->ch.mode == RADIO_MODE_DMR ? "DMR" : v->am ? "AM" : "FM";
++	switch (v->ch.mode) {
++	case RADIO_MODE_DMR: return "DMR";
++	case RADIO_MODE_P25: return "P25";
++	case RADIO_MODE_NXDN: return "NXDN";
++	case RADIO_MODE_P25_TRUNK: return "P25T";
++	default: return v->am ? "AM" : "FM";
++	}
++}
++
++// P25 and NXDN channels (the multi-mode derivative): NACs in hex, IDs in decimal
++static void sb_nac(sbuf_t *b, uint16_t nac)
++{
++	static const char hex[] = "0123456789ABCDEF";
++	for (int s = 8; s >= 0; s -= 4)
++		sb_chr(b, hex[(nac >> s) & 0xFu]);
++}
++
++static bool dv_channel(const radio_view_t *v)
++{
++	return codeplug_mode_digital_voice(v->ch.mode);
++}
++
++// The PTT line: the talkgroup our calls go to
++static void draw_talk_dv(const radio_view_t *v)
++{
++	const ui_layout_t *L = &ui_layout;
++	const font_t *f = L->medium;
++	char buf[40], fit[40];
++	sbuf_t b;
++	sb_init(&b, buf, sizeof buf);
++	color_t c = ui_col.fg;
++	if (!v->dv.active) {
++		sb_str(&b, TR("Digital: not in this build"));
++		c = ui_col.warn;
++	} else if (v->ch.rx_only) {
++		sb_str(&b, TR("RX only"));
++		c = ui_col.warn;
++	} else if (v->ch.talkgroup == 0) {
++		sb_str(&b, TR("No talkgroup"));
++		c = ui_col.warn;
++	} else {
++		sb_str(&b, "TG ");
++		sb_u32(&b, v->ch.talkgroup, 1);
++	}
++	int x = gfx_text(f, 0, L->talk_y, "PTT" GLYPH_ARROW " ", ui_col.dim);
++	gfx_text_fit(f, buf, gfx_width() - x, fit, sizeof fit);
++	gfx_text(f, x, L->talk_y, fit, c);
++}
++
++// Chips: NAC (RX/TX when they differ), power, our unit ID
++static void draw_chips_dv(const radio_view_t *v)
++{
++	const ui_layout_t *L = &ui_layout;
++	const font_t *f = L->small;
++	int w = gfx_width();
++	char buf[48];
++	sbuf_t b;
++	int x = 0, y = L->chips_y;
++	sb_init(&b, buf, sizeof buf);
++	sb_str(&b, v->ch.mode == RADIO_MODE_NXDN ? "RAN " : "NAC ");
++	if (v->ch.mode == RADIO_MODE_NXDN) {
++		sb_u32(&b, v->ch.nac_tx, 1);
++	} else {
++		sb_nac(&b, v->ch.nac_tx);
++		if (v->ch.nac_rx != v->ch.nac_tx) {
++			sb_chr(&b, '/');
++			if (v->ch.nac_rx == CODEPLUG_NAC_ANY)
++				sb_str(&b, TR("any"));
++			else
++				sb_nac(&b, v->ch.nac_rx);
++		}
++	}
++	x = gfx_text(f, x, y, buf, ui_col.fg) + f->w;
++	x = gfx_text(f, x, y, ui_power_name(v->power), ui_col.fg) + f->w;
++	sb_init(&b, buf, sizeof buf);
++	sb_str(&b, "ID ");
++	sb_u32(&b, v->dv.source != 0 && v->state == RS_TX ? v->dv.source : v->ch.dmr_id, 1);
++	if (v->ch.dmr_id != 0 && x + gfx_text_width(f, buf) <= w)
++		gfx_text(f, x, y, buf, ui_col.fg);
++}
++
++// The call heard or sent: "TG 100  ID 1234567", encrypted calls marked (never decrypted)
++static void sb_dv_call(sbuf_t *b, uint16_t tg, uint32_t src)
++{
++	sb_str(b, "TG ");
++	sb_u32(b, tg, 1);
++	if (src != 0) {
++		sb_str(b, "  ID ");
++		sb_u32(b, src, 1);
++	}
+ }
+ 
+ // Status strip (P2): state pill, mode, monitor, lock, unread messages, signal, battery.
+@@ -389,7 +478,7 @@
+ 	const char *mw = mode_word(v);
+ #if CONFIG_DUAL_WATCH
+ 	if (s->dual.on)
+-		mw = s->dual.pane[s->dual.sel].mode == RADIO_MODE_DMR ? "DMR" : "FM";
++		mw = s->dual.pane[s->dual.sel].mode == RADIO_MODE_DMR ? "DMR" : s->dual.pane[s->dual.sel].mode == RADIO_MODE_P25 ? "P25" : "FM";
+ #endif
+ 	int lx = gfx_text(f, x, ty, mw, sfg);
+ #if CONFIG_DUAL_WATCH
+@@ -893,6 +982,10 @@
+ 
+ static void draw_talk(const radio_view_t *v)
+ {
++	if (dv_channel(v)) {
++		draw_talk_dv(v);
++		return;
++	}
+ #if CONFIG_DMR
+ 	if (v->ch.mode == RADIO_MODE_DMR) {
+ 		draw_talk_dmr(v);
+@@ -939,6 +1032,10 @@
+ 	sbuf_t b;
+ 	int x = 0, y = L->chips_y;
+ 
++	if (dv_channel(v)) {
++		draw_chips_dv(v);
++		return;
++	}
+ #if CONFIG_DMR
+ 	if (v->ch.mode == RADIO_MODE_DMR) {
+ 		draw_chips_dmr(v, s);
+@@ -1030,12 +1127,15 @@
+ 	case TXDENY_NO_FREQ: sb_str(&b, TR("No TX frequency set")); break;
+ 	case TXDENY_MODE: sb_str(&b, TR("Mode: not in this build")); break;
+ 	case TXDENY_NO_CODEC: sb_str(&b, TR("No codec: voice off")); break;
+-	case TXDENY_NO_DMR: sb_str(&b, TR("DMR modem not running")); break;
++	case TXDENY_NO_DMR: sb_str(&b, dv_channel(v) ? TR("Modem fault: TX off") : TR("DMR modem not running")); break;
+ 	case TXDENY_BUSY: sb_str(&b, TR("Channel busy")); break;
+ 	case TXDENY_NO_REPEATER: sb_str(&b, TR("No repeater answered")); break;
+ 	case TXDENY_REJECTED: sb_str(&b, TR("Modem refused to send")); break;
+ 	case TXDENY_HOTSPOT: sb_str(&b, TR("Hotspot mode: PTT off")); break;
+-	case TXDENY_NO_ID: sb_str(&b, TR("No DMR ID in codeplug")); break;
++	case TXDENY_NO_ID:
++		sb_str(&b, dv_channel(v) ? (v->ch.talkgroup == 0 ? TR("No talkgroup on channel") : TR("No unit ID in codeplug")) :
++			TR("No DMR ID in codeplug"));
++		break;
+ 	case TXDENY_AM: sb_str(&b, TR("Air band: receive only")); break;
+ 	case TXDENY_BCAST: sb_str(&b, TR("Broadcast: receive only")); break;
+ 	case TXDENY_SFR_RPT: sb_str(&b, TR("Repeater channel: PTT off")); break;
+@@ -1494,7 +1594,14 @@
+ 		int tw = gfx_text_width(big, buf);
+ 		gfx_text(big, w - tw, y, buf, ui_col.fg);
+ 		draw_meter(0, y + big->h / 4, w - tw - big->w, big->h / 2, v->rssi_dbm);
+-		if (two)
++		if (two && dv_channel(v) && v->dv.state == RDV_RX) {
++			sb_init(&b, buf, sizeof buf);
++			if (v->dv.emergency)
++				sb_str(&b, TR("EMERGENCY "));
++			sb_dv_call(&b, v->dv.talkgroup, v->dv.source);
++			gfx_text_fit(sm, buf, w, fit, sizeof fit);
++			gfx_text(sm, 0, y2, fit, v->dv.emergency ? ui_col.warn : ui_col.rx);
++		} else if (two)
+ 			gfx_text(sm, 0, y2, v->monitor ? TR("Squelch open") : TR("Receiving"), ui_col.rx);
+ 		break;
+ 	}
+@@ -1512,6 +1619,10 @@
+ 				gfx_text(sm, 0, y2, buf, ui_col.fg);
+ 				break;
+ 			}
++			if (dv_channel(v)) {
++				sb_dv_call(&b, v->dv.talkgroup, v->dv.source);
++				sb_str(&b, "  ");
++			}
+ 			if (v->tot_s) {
+ 				uint32_t el = v->tx_elapsed_ms / 1000u;
+ 				sb_mmss(&b, el < v->tot_s ? v->tot_s - el : 0);
+@@ -1541,6 +1652,33 @@
+ 			break;
+ 		}
+ #endif
++		if (dv_channel(v) && v->dv.state == RDV_RX_OTHER) {
++			// Heard, not played: an encrypted call, another talkgroup, another NAC
++			if (v->dv.encrypted) {
++				sb_str(&b, TR("Encrypted "));	// muted: never decrypted
++				sb_str(&b, "TG ");
++				sb_u32(&b, v->dv.talkgroup, 1);
++			} else if (v->ch.mode != RADIO_MODE_NXDN && v->dv.nac != v->ch.nac_rx && v->ch.nac_rx != CODEPLUG_NAC_ANY) {
++				sb_str(&b, TR("Busy: NAC "));
++				sb_nac(&b, v->dv.nac);
++			} else {
++				sb_dv_call(&b, v->dv.talkgroup, v->dv.source);
++			}
++			y += (L->activity_h - sm->h) / 2;
++			gfx_text_fit(sm, buf, gfx_width(), fit, sizeof fit);
++			gfx_text(sm, 0, y, fit, ui_col.warn);
++			break;
++		}
++		if (dv_channel(v) && v->dv.last_ms != 0) {
++			sb_str(&b, TR("Last ID "));
++			sb_u32(&b, v->dv.last_source, 1);
++			sb_chr(&b, ' ');
++			sb_age(&b, s->now_ms - v->dv.last_ms);
++			y += (L->activity_h - sm->h) / 2;
++			gfx_text_fit(sm, buf, gfx_width(), fit, sizeof fit);
++			gfx_text(sm, 0, y, fit, ui_col.dim);
++			break;
++		}
+ 		if (v->last_rx_ms) {
+ 			sb_str(&b, TR("Last activity "));
+ 			sb_age(&b, s->now_ms - v->last_rx_ms);
+--- a/core/ui/ui_menus.c
++++ b/core/ui/ui_menus.c
+@@ -917,7 +917,12 @@
+ 		sb_u32(&wb, known ? c.id : 9u, 1);
+ 	} else
+ #endif
+-	{
++	if (codeplug_mode_digital_voice(ch->mode)) {
++		// P25 and NXDN: the talkgroup, as DMR ("TG100")
++		sb_str(&wb, ch->mode == RADIO_MODE_NXDN ? "GR" : "TG");
++		prefix = 2;
++		sb_u32(&wb, ch->talkgroup, 1);
++	} else {
+ 		sb_str(&wb, ch->mode == RADIO_MODE_DMR ? "DMR" : radio_am_channel(ch) ? "AM" : "FM");
+ 	}
+ 	sb_str(b, TEXT_ALT_OPEN);
+@@ -1722,7 +1727,7 @@
+ // Without CONFIG_CHANNEL_EDIT the rows are read only and OK goes to the channel
+ 
+ enum { CE_NAME, CE_NUMBER, CE_MODE, CE_RX, CE_TX, CE_POWER, CE_RX_ONLY, CE_BW, CE_RX_TONE, CE_TX_TONE, CE_VOX,
+-       CE_CC, CE_TS, CE_CONTACT, CE_LIST, CE_ID, CE_DMO, CE_BEEP, CE_ALIAS1, CE_ALIAS2, CE_TOT, CE_SCAN, CE_ECO,
++       CE_NAC, CE_TG, CE_CC, CE_TS, CE_CONTACT, CE_LIST, CE_ID, CE_DMO, CE_BEEP, CE_ALIAS1, CE_ALIAS2, CE_TOT, CE_SCAN, CE_ECO,
+        CE_ZONES, CE_GO, CE_SHARE, CE_SAVE, CE_SAVE_NEW, CE_COUNT, CE_NONE = 0xFF };
+ 
+ static channel_t ced_ch;		// what the screen shows (the working copy when editing)
+@@ -1758,6 +1763,7 @@
+ 	[CE_NAME] = CE_FIELD(name), [CE_MODE] = CE_FIELD(mode), [CE_RX] = CE_FIELD(rx_hz), [CE_TX] = CE_FIELD(tx_hz),
+ 	[CE_POWER] = CE_FIELD(power), [CE_RX_ONLY] = CE_FIELD(rx_only), [CE_BW] = CE_FIELD(bw),
+ 	[CE_RX_TONE] = CE_FIELD(rx_tone), [CE_TX_TONE] = CE_FIELD(tx_tone), [CE_VOX] = CE_FIELD(vox),
++	[CE_NAC] = CE_FIELD(nac_rx), [CE_TG] = CE_FIELD(talkgroup),
+ 	[CE_CC] = CE_FIELD(color_code), [CE_TS] = CE_FIELD(timeslot), [CE_CONTACT] = CE_FIELD(contact),
+ 	[CE_LIST] = CE_FIELD(listen_list), [CE_ID] = CE_FIELD(dmr_id), [CE_DMO] = CE_FIELD(dmo),
+ 	[CE_BEEP] = CE_FIELD(no_beep), [CE_ALIAS1] = { offsetof(channel_t, alias_tx), 1, CODEPLUG_ALIAS_TS1_TEXT },
+@@ -1823,6 +1829,7 @@
+ static void ced_build(void)
+ {
+ 	bool dmr = CONFIG_DMR && ced_ch.mode == RADIO_MODE_DMR;
++	bool dv = codeplug_mode_digital_voice(ced_ch.mode);	// P25: NAC, talkgroup and unit ID instead
+ 	bool edit = CONFIG_CHANNEL_EDIT;
+ 	bool fresh = false, changed = false;
+ #if CONFIG_CHANNEL_EDIT
+@@ -1833,7 +1840,9 @@
+ 	for (uint8_t r = 0; r < CE_COUNT; r++) {
+ 		bool fm_only = r == CE_BW || r == CE_RX_TONE || r == CE_TX_TONE || r == CE_VOX;
+ 		bool dmr_only = r >= CE_CC && r <= CE_ALIAS2;
+-		if ((fm_only && dmr) || (dmr_only && !dmr) || (r == CE_MODE && !CONFIG_DMR))
++		bool dv_only = r == CE_NAC || r == CE_TG;
++		if ((fm_only && (dmr || dv)) || (dmr_only && !dmr && !(dv && r == CE_ID)) || (dv_only && !dv) ||
++		    (r == CE_MODE && !CONFIG_DMR))
+ 			continue;
+ 		if ((r == CE_ZONES || r == CE_GO || r == CE_SHARE || r == CE_SAVE_NEW) && fresh)
+ 			continue;
+@@ -1972,7 +1981,8 @@
+ static void chinfo_item(uint16_t i, ui_item_t *it)
+ {
+ 	static const char *const labels[CE_COUNT] = { TRN("Name"), TRN("Number"), TRN("Mode"), "RX", "TX", TRN("Power"),
+-		TRN("RX only"), TRN("Bandwidth"), TRN("RX CTCSS/DCS"), TRN("TX CTCSS/DCS"), "VOX", TRN("Color code"),
++		TRN("RX only"), TRN("Bandwidth"), TRN("RX CTCSS/DCS"), TRN("TX CTCSS/DCS"), "VOX", "NAC", TRN("Talkgroup"),
++		TRN("Color code"),
+ 		TRN("Timeslot"), TRN("TX contact"), TRN("RX group list"), TRN("Own ID"), TRN("Direct mode"),
+ 		TRN("Talk permit beeps"), TRN("Talker alias TS1"), TRN("Talker alias TS2"), TRN("TX time-out"), TRN("Scan"),
+ 		TRN("Battery saver"), TRN("Zones"), TRN("Tune to this ch"), TRN(GLYPH_SHARE " Share channel to..."),
+@@ -1997,10 +2007,10 @@
+ 	sbuf_t b;
+ 	sb_init(&b, it->value, sizeof it->value);
+ #if CONFIG_CHANNEL_EDIT
+-	if (editing && (r == CE_RX || r == CE_TX || r == CE_ID)) {
++	if (editing && (r == CE_RX || r == CE_TX || r == CE_ID || r == CE_TG)) {
+ 		// What has been typed so far: "446.07_", "3101_"
+ 		for (uint8_t k = 0; k < ced_len; k++) {
+-			if (r != CE_ID && k == UI_ENTRY_MHZ)
++			if (r != CE_ID && r != CE_TG && k == UI_ENTRY_MHZ)
+ 				sb_chr(&b, '.');
+ 			sb_chr(&b, ced_digits[k]);
+ 		}
+@@ -2016,7 +2026,25 @@
+ 		sb_u32(&b, ced_num, 1);
+ 		break;
+ 	case CE_MODE:
+-		sb_str(&b, ch->mode == RADIO_MODE_DMR ? "DMR" : "FM");
++		sb_str(&b, ch->mode == RADIO_MODE_DMR ? "DMR" : ch->mode == RADIO_MODE_P25 ? "P25" :
++			ch->mode == RADIO_MODE_NXDN ? "NXDN" : ch->mode == RADIO_MODE_P25_TRUNK ? "P25 trunk" : "FM");
++		break;
++	case CE_NAC: {
++		// The TX NAC in hex, and RX: the same one or every NAC (OK switches them; the values from the editor or CSV)
++		static const char hex[] = "0123456789ABCDEF";
++		for (int s = 8; s >= 0; s -= 4)
++			sb_chr(&b, hex[(ch->nac_tx >> s) & 0xFu]);
++		if (ch->nac_rx == CODEPLUG_NAC_ANY)
++			sb_str(&b, TR(", RX any"));
++		else if (ch->nac_rx != ch->nac_tx)
++			sb_str(&b, TR(", RX other"));
++		break;
++	}
++	case CE_TG:
++		if (editing && ced_len > 0)
++			sb_str(&b, ced_digits);
++		else
++			sb_u32(&b, ch->talkgroup, 1);
+ 		break;
+ 	case CE_RX:
+ 		sb_freq(&b, ch->rx_hz);
+@@ -2147,6 +2175,8 @@
+ 		return TR("Receive only band: set FM");
+ 	if (CONFIG_DMR && c->mode == RADIO_MODE_DMR && c->contact == 0)
+ 		return TR("Pick a TX contact first");
++	if (codeplug_mode_digital_voice(c->mode) && c->talkgroup == 0)
++		return TR("Set a talkgroup first");
+ 	return NULL;
+ }
+ 
+@@ -2262,6 +2292,15 @@
+ 			break;
+ 		if (v > CE_ID_MAX) {
+ 			ui_toast(TR("IDs go up to 16776415"));
++			break;
++		}
++		ced_val = v;
++		ced_digits[ced_len++] = d;
++		ced_digits[ced_len] = 0;
++		break;
++	case CE_TG:
++		if (v > 65535) {
++			ui_toast(TR("Talkgroups go up to 65535"));
+ 			break;
+ 		}
+ 		ced_val = v;
+@@ -2320,6 +2359,10 @@
+ 		if (ced_len > 0)
+ 			c->dmr_id = (uint32_t)ced_val;	// 0 = the radio's
+ 		break;
++	case CE_TG:
++		if (ced_len > 0 && ced_val >= 1)
++			c->talkgroup = (uint16_t)ced_val;
++		break;
+ 	case CE_POWER:
+ 		c->power = ced_val >= board.power_count ? CODEPLUG_POWER_DEFAULT : (uint8_t)ced_val;
+ 		break;
+@@ -2365,7 +2408,7 @@
+ 	int dir = ev->action == ACT_NAV_UP ? 1 : ev->action == ACT_NAV_DOWN ? -1 :
+ 		ev->action == ACT_ENC_STEP ? (ev->value > 0 ? 1 : -1) : 0;
+ 	if (dir != 0 && ev->gesture != GESTURE_UP) {
+-		if (ced_edit != CE_RX && ced_edit != CE_TX && ced_edit != CE_ID)
++		if (ced_edit != CE_RX && ced_edit != CE_TX && ced_edit != CE_ID && ced_edit != CE_TG)
+ 			ced_spin(dir);	// typed fields ignore the knob, so the focus can't move under them either
+ 		ui_dirty();
+ 		return true;
+@@ -2376,8 +2419,8 @@
+ 		return true;
+ 	}
+ 	if (ev->action == ACT_BACK && ev->gesture == GESTURE_PRESS) {
+-		if ((ced_edit == CE_RX || ced_edit == CE_TX || ced_edit == CE_ID || ced_edit == CE_RX_TONE ||
+-		     ced_edit == CE_TX_TONE) && ced_len > 0) {
++		if ((ced_edit == CE_RX || ced_edit == CE_TX || ced_edit == CE_ID || ced_edit == CE_TG ||
++		     ced_edit == CE_RX_TONE || ced_edit == CE_TX_TONE) && ced_len > 0) {
+ 			ced_digits[--ced_len] = 0;	// takes the last digit back
+ 			ced_val /= 10;
+ 		} else {
+@@ -2420,7 +2463,25 @@
+ 	uint8_t r = ced_rows[i];
+ 	switch (r) {
+ 	case CE_NAME: ui_text_open(c->name, CODEPLUG_NAME_LEN); break;
+-	case CE_MODE: c->mode = c->mode == RADIO_MODE_DMR ? RADIO_MODE_FM : RADIO_MODE_DMR; break;
++	case CE_MODE:
++		// FM, DMR, then P25 where the build has it (NXDN and trunking come from the editor or CSV)
++		c->mode = c->mode == RADIO_MODE_FM ? RADIO_MODE_DMR :
++			(c->mode == RADIO_MODE_DMR && CONFIG_P25 && CONFIG_P25_NATIVE) ? RADIO_MODE_P25 : RADIO_MODE_FM;
++		if (c->mode == RADIO_MODE_P25) {
++			if (c->nac_tx == 0 || c->nac_tx >= CODEPLUG_NAC_ANY)
++				c->nac_tx = CODEPLUG_NAC_DEFAULT;
++			if (c->nac_rx == 0)
++				c->nac_rx = c->nac_tx;
++			if (c->talkgroup == 0)
++				c->talkgroup = 1;
++			c->bw = RADIO_BW_12K5;
++		}
++		ced_build();
++		break;
++	case CE_NAC:
++		c->nac_rx = c->nac_rx == CODEPLUG_NAC_ANY ? c->nac_tx : CODEPLUG_NAC_ANY;
++		break;
++	case CE_TG:
+ 	case CE_RX:
+ 	case CE_TX:
+ 	case CE_ID:
+--- a/core/ui/ui_dual.c
++++ b/core/ui/ui_dual.c
+@@ -1300,7 +1300,8 @@
+ 	// "146.940 FM", else "146.940": the channel's name gives way last
+ 	sb_str(&b, TEXT_ALT_OPEN);
+ 	sb_freq(&b, ch.rx_hz);
+-	sb_str(&b, ch.mode == RADIO_MODE_DMR ? " DMR" : " FM");
++	sb_str(&b, ch.mode == RADIO_MODE_DMR ? " DMR" : ch.mode == RADIO_MODE_P25 ? " P25" : ch.mode == RADIO_MODE_NXDN ? " NXDN" :
++		ch.mode == RADIO_MODE_P25_TRUNK ? " P25T" : " FM");
+ 	sb_str(&b, TEXT_ALT_NEXT);
+ 	sb_freq(&b, ch.rx_hz);
+ 	sb_str(&b, TEXT_ALT_CLOSE);
+--- a/core/ui/lang/es.po
++++ b/core/ui/lang/es.po
+@@ -1597,6 +1597,10 @@
+ msgstr "CTCSS/DCS TX"
+ 
+ #: core/ui/ui_menus.c
++msgid "Talkgroup"
++msgstr "Grupo"
++
++#: core/ui/ui_menus.c
+ msgid "Color code"
+ msgstr "Código de color"
+ 
+@@ -1657,6 +1661,14 @@
+ msgstr "Guardar como nuevo"
+ 
+ #: core/ui/ui_menus.c
++msgid ", RX any"
++msgstr ", RX todos"
++
++#: core/ui/ui_menus.c
++msgid ", RX other"
++msgstr ", RX otro"
++
++#: core/ui/ui_menus.c
+ msgid "Yes"
+ msgstr "Sí"
+ 
+@@ -1693,6 +1705,10 @@
+ msgstr "Elige antes un contacto TX"
+ 
+ #: core/ui/ui_menus.c
++msgid "Set a talkgroup first"
++msgstr "Primero pon un grupo"
++
++#: core/ui/ui_menus.c
+ msgid "No changes to save"
+ msgstr "Sin cambios que guardar"
+ 
+@@ -1709,6 +1725,10 @@
+ msgstr "ID máximo es 16776415"
+ 
+ #: core/ui/ui_menus.c
++msgid "Talkgroups go up to 65535"
++msgstr "Grupos hasta 65535"
++
++#: core/ui/ui_menus.c
+ msgid "DCS codes use digits 0-7"
+ msgstr "Códigos DCS: dígitos 0-7"
+ 
+@@ -1787,10 +1807,6 @@
+ #: core/ui/ui_menus.c
+ msgid "Type"
+ msgstr "Tipo"
+-
+-#: core/ui/ui_menus.c
+-msgid "Talkgroup"
+-msgstr "Grupo"
+ 
+ #: core/ui/ui_menus.c
+ msgid "Channel's"
+@@ -3121,6 +3137,18 @@
+ msgstr "Codeplug anterior"
+ 
+ #: core/ui/ui_screens.c
++msgid "Digital: not in this build"
++msgstr "Digital: no incluido"
++
++#: core/ui/ui_screens.c
++msgid "No talkgroup"
++msgstr "Sin grupo"
++
++#: core/ui/ui_screens.c
++msgid "any"
++msgstr "todos"
++
++#: core/ui/ui_screens.c
+ msgid "IDLE"
+ msgstr "LIBRE"
+ 
+@@ -3185,6 +3213,10 @@
+ msgstr "Sin códec: voz apagada"
+ 
+ #: core/ui/ui_screens.c
++msgid "Modem fault: TX off"
++msgstr "Fallo del módem: TX off"
++
++#: core/ui/ui_screens.c
+ msgid "DMR modem not running"
+ msgstr "Módem DMR detenido"
+ 
+@@ -3205,6 +3237,14 @@
+ msgstr "Modo hotspot: sin PTT"
+ 
+ #: core/ui/ui_screens.c
++msgid "No talkgroup on channel"
++msgstr "Canal sin grupo"
++
++#: core/ui/ui_screens.c
++msgid "No unit ID in codeplug"
++msgstr "Sin ID en el codeplug"
++
++#: core/ui/ui_screens.c
+ msgid "No DMR ID in codeplug"
+ msgstr "Sin ID DMR en codeplug"
+ 
+@@ -3377,6 +3417,10 @@
+ msgstr "MON: monitor digital"
+ 
+ #: core/ui/ui_screens.c
++msgid "EMERGENCY "
++msgstr "EMERGENCIA "
++
++#: core/ui/ui_screens.c
+ msgid "Squelch open"
+ msgstr "Squelch abierto"
+ 
+@@ -3399,6 +3443,18 @@
+ #: core/ui/ui_screens.c
+ msgid "Can't transmit"
+ msgstr "No se puede transmitir"
++
++#: core/ui/ui_screens.c
++msgid "Encrypted "
++msgstr "Cifrado "
++
++#: core/ui/ui_screens.c
++msgid "Busy: NAC "
++msgstr "Ocupado: NAC "
++
++#: core/ui/ui_screens.c
++msgid "Last ID "
++msgstr "Último ID "
+ 
+ #: core/ui/ui_screens.c
+ msgid "Last activity "
+--- a/core/ui/lang/it.po
++++ b/core/ui/lang/it.po
+@@ -1597,6 +1597,10 @@
+ msgstr "CTCSS/DCS TX"
+ 
+ #: core/ui/ui_menus.c
++msgid "Talkgroup"
++msgstr "Gruppo"
++
++#: core/ui/ui_menus.c
+ msgid "Color code"
+ msgstr "Color code"
+ 
+@@ -1657,6 +1661,14 @@
+ msgstr "Salva come nuovo canale"
+ 
+ #: core/ui/ui_menus.c
++msgid ", RX any"
++msgstr ", RX tutti"
++
++#: core/ui/ui_menus.c
++msgid ", RX other"
++msgstr ", RX altro"
++
++#: core/ui/ui_menus.c
+ msgid "Yes"
+ msgstr "Sì"
+ 
+@@ -1693,6 +1705,10 @@
+ msgstr "Scegli prima un contatto TX"
+ 
+ #: core/ui/ui_menus.c
++msgid "Set a talkgroup first"
++msgstr "Prima imposta un gruppo"
++
++#: core/ui/ui_menus.c
+ msgid "No changes to save"
+ msgstr "Niente da salvare"
+ 
+@@ -1709,6 +1725,10 @@
+ msgstr "Gli ID arrivano a 16776415"
+ 
+ #: core/ui/ui_menus.c
++msgid "Talkgroups go up to 65535"
++msgstr "Gruppi fino a 65535"
++
++#: core/ui/ui_menus.c
+ msgid "DCS codes use digits 0-7"
+ msgstr "Codici DCS: cifre 0-7"
+ 
+@@ -1787,10 +1807,6 @@
+ #: core/ui/ui_menus.c
+ msgid "Type"
+ msgstr "Tipo"
+-
+-#: core/ui/ui_menus.c
+-msgid "Talkgroup"
+-msgstr "Gruppo"
+ 
+ #: core/ui/ui_menus.c
+ msgid "Channel's"
+@@ -3121,6 +3137,18 @@
+ msgstr "Codeplug precedente"
+ 
+ #: core/ui/ui_screens.c
++msgid "Digital: not in this build"
++msgstr "Digitale: non incluso"
++
++#: core/ui/ui_screens.c
++msgid "No talkgroup"
++msgstr "Nessun gruppo"
++
++#: core/ui/ui_screens.c
++msgid "any"
++msgstr "tutti"
++
++#: core/ui/ui_screens.c
+ msgid "IDLE"
+ msgstr "IDLE"
+ 
+@@ -3185,6 +3213,10 @@
+ msgstr "Niente codec: voce off"
+ 
+ #: core/ui/ui_screens.c
++msgid "Modem fault: TX off"
++msgstr "Guasto modem: TX off"
++
++#: core/ui/ui_screens.c
+ msgid "DMR modem not running"
+ msgstr "Modem DMR non attivo"
+ 
+@@ -3205,6 +3237,14 @@
+ msgstr "Modo hotspot: PTT off"
+ 
+ #: core/ui/ui_screens.c
++msgid "No talkgroup on channel"
++msgstr "Canale senza gruppo"
++
++#: core/ui/ui_screens.c
++msgid "No unit ID in codeplug"
++msgstr "Nessun ID nel codeplug"
++
++#: core/ui/ui_screens.c
+ msgid "No DMR ID in codeplug"
+ msgstr "Nessun ID DMR nel codeplug"
+ 
+@@ -3377,6 +3417,10 @@
+ msgstr "MON: monitor digitale"
+ 
+ #: core/ui/ui_screens.c
++msgid "EMERGENCY "
++msgstr "EMERGENZA "
++
++#: core/ui/ui_screens.c
+ msgid "Squelch open"
+ msgstr "Squelch aperto"
+ 
+@@ -3399,6 +3443,18 @@
+ #: core/ui/ui_screens.c
+ msgid "Can't transmit"
+ msgstr "Non puoi trasmettere"
++
++#: core/ui/ui_screens.c
++msgid "Encrypted "
++msgstr "Cifrato "
++
++#: core/ui/ui_screens.c
++msgid "Busy: NAC "
++msgstr "Occupato: NAC "
++
++#: core/ui/ui_screens.c
++msgid "Last ID "
++msgstr "Ultimo ID "
+ 
+ #: core/ui/ui_screens.c
+ msgid "Last activity "
+--- a/tests/host/sim/ui_sim.c
++++ b/tests/host/sim/ui_sim.c
+@@ -2330,6 +2330,43 @@
+ 		advance(1500);
+ 		return true;
+ 	}
++	if (strcmp(t, "p25") == 0 && arg != NULL) {	// a P25 channel: idle, rx (a call plays), tx, enc (encrypted call heard)
++		view.ch.mode = RADIO_MODE_P25;
++		strcpy(view.ch.name, "P25 Ops");
++		view.ch.rx_hz = view.ch.tx_hz = 155475000;
++		view.ch.nac_tx = 0x293;
++		view.ch.nac_rx = CODEPLUG_NAC_ANY;
++		view.ch.talkgroup = 100;
++		view.ch.dmr_id = 1234567;
++		view.dv.active = true;
++		view.dv.last_talkgroup = 100;
++		view.dv.last_source = 7654321;
++		view.dv.last_ms = now_ms > 60000 ? now_ms - 60000 : 1;
++		view.state = RS_IDLE;
++		view.dv.state = RDV_IDLE;
++		if (strcmp(arg, "rx") == 0) {
++			view.state = RS_RX;
++			view.rssi_dbm = -82;
++			view.dv.state = RDV_RX;
++			view.dv.talkgroup = 100;
++			view.dv.source = 7654321;
++		} else if (strcmp(arg, "tx") == 0) {
++			view.state = RS_TX;
++			view.tx_elapsed_ms = 12000;
++			view.tot_s = 180;
++			view.dv.state = RDV_TX;
++			view.dv.talkgroup = 100;
++			view.dv.source = 1234567;
++		} else if (strcmp(arg, "enc") == 0) {
++			view.dv.state = RDV_RX_OTHER;
++			view.dv.encrypted = true;
++			view.dv.talkgroup = 200;
++			view.dv.source = 5550001;
++		}
++		changed();
++		advance(500);
++		return true;
++	}
+ 	if (strcmp(t, "datatx") == 0 || strcmp(t, "dataend") == 0) {	// the DMR stack sends a data burst list without PTT
+ 		bool on = t[4] == 't';
+ 		view.state = on ? RS_TX : RS_IDLE;
+--- a/tests/host/uiSim.c
++++ b/tests/host/uiSim.c
+@@ -39,6 +39,10 @@
+ 	{ "home_dmr_lastheard", "call:3101234,91,g wait:11000" },
+ 	{ "home_reply", "call:3101234,91,g" },
+ 	{ "home_fm", "down" },
++	{ "home_p25", "p25:idle" },
++	{ "rx_p25", "p25:rx" },
++	{ "tx_p25", "p25:tx" },
++	{ "home_p25_encrypted", "p25:enc" },
+ 	{ "home_temporary", "down quick 1 2 up back" },
+ 	{ "home_vfo", "ok 4 up ok" },
+ 	{ "home_vfo_entry", "ok 4 up ok 4 4 6" },
