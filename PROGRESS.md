@@ -1,5 +1,53 @@
 # DM-32 conventional P25 progress
 
+## 2026-11-13 Phase 0 baseline (multi-mode fork)
+
+Goal of this fork: one image with FM, DMR, conventional P25 Phase 1, NXDN48
+and P25 trunking (Phase 1 control channel, FDMA voice, TDMA voice). This entry
+records the starting point. No radio was connected; nothing was flashed or
+transmitted.
+
+Build host: Linux x86_64 cloud container. The pinned toolchain was built from
+source with `tools/bootstrap_toolchain.sh` and `tools/bootstrap_newlib.sh`
+(binutils 2.45.1, GCC 14.3.0 csky-elf, newlib 4.5.0.20241231). All inputs in
+`sources.lock.json` verified. The ASan/UBSan tests need clang's compiler-rt
+(`libclang-rt-18-dev` on Ubuntu 24.04); without it `make codec-test` fails at
+link time, not in the tests themselves.
+
+Tests, all passing: 101 Python tests (1 skipped), P25 protocol oracle tests
+and sanitizers, codec harness (2,000 frames + 10,000 fuzz) and full
+PCM/IMBE/CAI pipeline, 17 modem-tooling tests, freestanding runtime (338,688
+checks), voice lifecycle, 13 native-modem tests, first-boot guards, receive
+audio, and RadioFoundry's own `make -C tests/host`.
+
+Link-time use of the main RAM region (211,456 bytes) and flash, from the
+linker's region totals. Every preset built with zero warnings; the native
+preset's forced rebuild was byte-identical.
+
+| Preset (`tools/build_radiofoundry.py` args) | Flash | Main RAM | RAM free | Least stack margin |
+|---|---:|---:|---:|---|
+| native (`--stack-check --verify-rebuild`) | 437,344 | 189,096 | 22,360 | idle task 136 |
+| lab (`--disable-native`) | 429,496 | 183,496 | 27,960 | idle task 136 |
+| P25 off (`--disable`) | 391,076 | 159,640 | 51,816 | idle task 136 |
+| native lean (`--lean`) | 422,644 | 182,584 | 28,872 | idle task 136 |
+| TX bench (`--first-boot --dev-update --tx-bench --lean --speed-codec`) | 468,048 | 195,152 | 16,304 | idle task 136 |
+| Upstream RadioFoundry `make BOARD=dm32` (its own defaults) | 575,960 | 211,128 | 328 | not run |
+
+The "about 33 KB free" figure in older notes is from the offline-only preset
+of November 5. Today's native preset leaves 22,360 bytes and the TX bench
+preset 16,304. Every new mode must be measured against these numbers. The
+largest RAM users in the native preset are the RTOS heap (41,472), the
+framebuffer (38,400), the P25 voice session (7,276), the IMBE encoder and
+decoder states (7,168 + 6,144) and the PCM FIFO (5,788). The stock AMBE codec
+window (83,456 + 12,152 bytes) is reserved separately; `--with-local-stock`
+merged the local `.049` donor into an ignored `.codec.bin`. Nothing from it is
+committed.
+
+Full numbers: `results/phase0-baseline.json`.
+
+Not verified in hardware: everything in this entry is a build or host-test
+result.
+
 ## 2026-11-06 transmit handoff trace
 
 Two mic calls recorded both the first 192 modem handoffs and independent

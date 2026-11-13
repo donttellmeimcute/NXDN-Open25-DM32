@@ -1,0 +1,144 @@
+{
+  "date": "2026-11-13",
+  "host": "Linux x86_64 cloud container, GCC 14.3.0 csky-elf (pinned), newlib 4.5.0.20241231",
+  "radio_connected": false,
+  "note": "Link-time sizes; RAM capacity is the 211,456-byte main region of boards/dm32/memory.ld. The stock AMBE codec window (83,456 + 12,152 bytes) is reserved separately and is not in these figures. Byte counts are the linker's FLASH/RAM region totals from the build log.",
+  "presets": {
+    "native": {
+      "builder_args": "--stack-check --verify-rebuild",
+      "flash_bytes": 437344,
+      "main_ram_bytes": 189096,
+      "main_ram_free_bytes": 22360,
+      "sections": {
+        ".text": 305204,
+        ".rodata": 118412,
+        ".ramfunc": 12776,
+        ".ram_lo": 10200,
+        ".data": 952,
+        ".bss": 162604,
+        ".stack": 2052
+      },
+      "least_stack_free": {
+        "task": "prvIdleTask",
+        "bytes": 136
+      },
+      "compiler_warnings": 0,
+      "forced_rebuild_identical": false
+    },
+    "lab": {
+      "builder_args": "--disable-native --stack-check",
+      "flash_bytes": 429496,
+      "main_ram_bytes": 183496,
+      "main_ram_free_bytes": 27960,
+      "sections": {
+        ".text": 301492,
+        ".rodata": 118256,
+        ".ramfunc": 8796,
+        ".ram_lo": 10204,
+        ".data": 952,
+        ".bss": 160984,
+        ".stack": 2048
+      },
+      "least_stack_free": {
+        "task": "prvIdleTask",
+        "bytes": 136
+      },
+      "compiler_warnings": 0,
+      "forced_rebuild_identical": false
+    },
+    "off": {
+      "builder_args": "--disable --stack-check",
+      "flash_bytes": 391076,
+      "main_ram_bytes": 159640,
+      "main_ram_free_bytes": 51816,
+      "sections": {
+        ".text": 272300,
+        ".rodata": 109028,
+        ".ramfunc": 8796,
+        ".ram_lo": 10204,
+        ".data": 952,
+        ".bss": 137128,
+        ".stack": 2048
+      },
+      "least_stack_free": {
+        "task": "prvIdleTask",
+        "bytes": 136
+      },
+      "compiler_warnings": 0,
+      "forced_rebuild_identical": false
+    },
+    "native-lean": {
+      "builder_args": "--lean --stack-check",
+      "flash_bytes": 422644,
+      "main_ram_bytes": 182584,
+      "main_ram_free_bytes": 28872,
+      "sections": {
+        ".text": 292680,
+        ".rodata": 116236,
+        ".ramfunc": 12776,
+        ".ram_lo": 10200,
+        ".data": 952,
+        ".bss": 156092,
+        ".stack": 2052
+      },
+      "least_stack_free": {
+        "task": "prvIdleTask",
+        "bytes": 136
+      },
+      "compiler_warnings": 0,
+      "forced_rebuild_identical": false
+    },
+    "firstboot-lean-dev-tx": {
+      "builder_args": "--first-boot --dev-update --tx-bench --lean --speed-codec --stack-check",
+      "flash_bytes": 468048,
+      "main_ram_bytes": 195152,
+      "main_ram_free_bytes": 16304,
+      "sections": {
+        ".text": 334852,
+        ".rodata": 118216,
+        ".ramfunc": 14028,
+        ".ram_lo": 10204,
+        ".data": 952,
+        ".bss": 167408,
+        ".stack": 2048
+      },
+      "least_stack_free": {
+        "task": "prvIdleTask",
+        "bytes": 136
+      },
+      "compiler_warnings": 0,
+      "forced_rebuild_identical": false
+    }
+  },
+  "upstream_dm32_default": {
+    "commit": "dfbaf20c400c73e2ccf6edb80af7d1d255bee418",
+    "flash_bytes": 575960,
+    "main_ram_bytes": 211128,
+    "main_ram_free_bytes": 328,
+    "note": "Pristine RadioFoundry `make BOARD=dm32` with its own defaults (APRS, hotspot, IP gateway, PPP, SFR, zone share on); Open25 presets switch those off"
+  },
+  "tests": {
+    "python_unittest": {
+      "ran": 101,
+      "skipped": 1,
+      "result": "OK"
+    },
+    "protocol_p25": "PASS (frames, stream, damage, interleave)",
+    "protocol_sanitizers": "PASS",
+    "codec_harness": "PASS 2000 frames + 10000 fuzz (ASan/UBSan)",
+    "codec_pipeline": "PASS",
+    "modem_tooling": {
+      "ran": 17,
+      "result": "OK"
+    },
+    "runtime_memory": "338688 checks passed",
+    "voice": "PASS (selftest pcm_crc 4e158373)",
+    "native": {
+      "ran": 13,
+      "result": "OK"
+    },
+    "firstboot": "PASS",
+    "receive_audio": "PASS",
+    "radiofoundry_host_tests": "make -C tests/host: exit 0"
+  }
+}
