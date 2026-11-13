@@ -14,6 +14,9 @@ separate and are not relicensed by this project's LICENSE.
 | mbelib | same codec records | ISC, copyright notice in `LICENSES/mbelib-ISC.txt`; independent test oracle, not linked into embedded codec |
 | OP25 | `docs/protocol-sources.json` | p25craft GPL-2.0-or-later adapted for CAI; selected GPL 3 distribution; GPL/LGPL helper/ezpwd headers are separate test oracles |
 | MMDVM | protocol source record | GPL-2.0-or-later P25 source; investigation only, no embedded dependency or target hardware substitution |
+| MMDVMHost | `6ffa6d354a2c185316201c27c831c766a25a5653`, `docs/protocol-sources.json` | GPL-2.0-or-later (G4KLX). Reference for the NXDN layer (LICH, SACCH, FACCH1, convolutional code, CRC, scrambler) and a host test oracle. Where `src/nxdn` follows its logic the file says so and keeps the notice; the combination is distributed under GPL-3.0-or-later |
+| dsd-fme | `34753963b8855c6c07b79250cb4de4f2c38a4613`, `docs/validation.md` | ISC (DSD) with GPL-2.0 files (dstar/descramble); built locally as an independent decoder for host tests only, never linked or distributed |
+| RadioFoundry upstream changes | `integration/radiofoundry/patches/*.patch` | Patches to MIT files of the pinned upstream; the derivative is GPL-3.0-or-later as a whole and none of it is offered upstream |
 | gzalo/dm32-uv | lock file | MIT repository; bootloader research lead |
 | Roger Clark DM32 tools/helper | lock file | No repository license declared; fetched locally for audit and guarded binary patching; no original helper or script vendored into tracked source |
 | baocoder | lock file | ISC main code with separate firmware-table provenance caveats; research reference only, no code/tables copied into this project's codec |
