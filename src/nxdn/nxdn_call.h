@@ -62,9 +62,12 @@ typedef struct {
     void *ctx;
     /* sync */
     uint32_t shift;
+    uint16_t fsw_hits;        /* bit k: a frame sync word ended k dibits ago */
     uint8_t frame[NXDN_FRAME_BYTES];
     uint16_t pos;             /* bits collected after the FSW start */
     uint8_t state, misses;
+    bool tentative;           /* sync found by the hunt, not yet confirmed by the next frame's FSW */
+    uint8_t sync_errors;      /* bit errors of the FSW a tentative sync started on */
     /* the call */
     bool in_call, have_msg, admitted, playing;
     nxdn_call_msg msg;
@@ -72,7 +75,7 @@ typedef struct {
     uint8_t part_mask, last_part;
     uint8_t last_ran, last_lich;
     /* counters */
-    uint32_t frames, bad_lich, lich_assumed, bad_sacch, foreign_ran, calls, late_entries, releases;
+    uint32_t frames, bad_lich, lich_assumed, bad_sacch, foreign_ran, calls, late_entries, releases, false_syncs;
     uint32_t slots_played, slots_muted, sync_losses;
 } nxdn_rx;
 

@@ -127,6 +127,8 @@ void nxdn_rx_reset(nxdn_rx *rx)
     end_call(rx);
     rx->state = NXDN_RX_HUNT;
     rx->shift = 0;
+    rx->fsw_hits = 0;
+    rx->tentative = false;
     rx->pos = 0;
     rx->misses = 0;
 }
@@ -174,15 +176,14 @@ static void voice(nxdn_rx *rx, const uint8_t f[NXDN_FRAME_BYTES], unsigned first
 static void superframe(nxdn_rx *rx, const nxdn_sacch *s)
 {
     unsigned part = 3u - (s->structure & 3u);
-    /* parts must arrive in order 0, 1, 2, 3; anything else starts over */
-    if (part == 0 || (rx->part_mask && part == (unsigned)rx->last_part + 1u)) {
-        if (part == 0) rx->part_mask = 0;
-        rx->parts[part][0] = (uint8_t)(s->data >> 10);
-        rx->parts[part][1] = (uint8_t)(s->data >> 2);
-        rx->parts[part][2] = (uint8_t)(s->data << 6);
-        rx->part_mask |= (uint8_t)(1u << part);
-        rx->last_part = (uint8_t)part;
-    } else rx->part_mask = 0;
+    /* The VCALL repeats unchanged in every superframe of a call, so its four parts may come
+     * from two superframes: a receiver that joins in the middle of one needs four frames, not
+     * up to seven. Each part has its own CRC (nxdn_sacch_decode). */
+    rx->parts[part][0] = (uint8_t)(s->data >> 10);
+    rx->parts[part][1] = (uint8_t)(s->data >> 2);
+    rx->parts[part][2] = (uint8_t)(s->data << 6);
+    rx->part_mask |= (uint8_t)(1u << part);
+    rx->last_part = (uint8_t)part;
     if (rx->part_mask != 0xF) return;
     uint8_t l3[NXDN_LAYER3_BYTES] = { 0 };
     for (unsigned p = 0; p < 4; p++)
@@ -249,32 +250,82 @@ static void process(nxdn_rx *rx)
     }
 }
 
+/* Sync on the FSW that ended `ago` dibits back: the frame restarts with the FSW
+ * and the dibits since, which are still in the shift register (ago < 10) */
+static void sync_at(nxdn_rx *rx, unsigned ago, unsigned errors)
+{
+    rx->state = NXDN_RX_SYNCED;
+    rx->tentative = true;
+    rx->sync_errors = (uint8_t)errors;
+    memset(rx->frame, 0, sizeof rx->frame);
+    nxdn_put_fsw(rx->frame);
+    rx->pos = NXDN_FSW_BITS;
+    for (unsigned k = ago; k-- > 0;) {
+        uint8_t d = (uint8_t)((rx->shift >> (2 * k)) & 3u);
+        nxdn_set_bit(rx->frame, rx->pos, d >> 1);
+        nxdn_set_bit(rx->frame, rx->pos + 1, d & 1u);
+        rx->pos = (uint16_t)(rx->pos + 2);
+    }
+    rx->misses = 0;
+}
+
+/* The LICH of the frame being collected (its 16 bits are in) is one a frame can carry */
+static bool lich_plausible(const nxdn_rx *rx)
+{
+    uint8_t f[NXDN_FRAME_BYTES];
+    memcpy(f, rx->frame, sizeof f);
+    nxdn_scramble(f);
+    nxdn_lich l;
+    return nxdn_lich_unpack(nxdn_lich_get(f, NULL), &l) && (l.rfct == NXDN_RFCT_RDCH || l.rfct == NXDN_RFCT_RTCH);
+}
+
 int nxdn_rx_push_dibit(nxdn_rx *rx, uint8_t dibit)
 {
     rx->shift = ((rx->shift << 2) | (dibit & 3u)) & 0xFFFFFu;
+    unsigned errors = popcount(rx->shift ^ NXDN_FSW);
+    rx->fsw_hits = (uint16_t)(rx->fsw_hits << 1 | (errors <= FSW_MAX_ERRORS));
     if (rx->state == NXDN_RX_HUNT) {
-        if (popcount(rx->shift ^ NXDN_FSW) <= FSW_MAX_ERRORS) {
-            rx->state = NXDN_RX_SYNCED;
-            memset(rx->frame, 0, sizeof rx->frame);
-            nxdn_put_fsw(rx->frame);
-            rx->pos = NXDN_FSW_BITS;
-            rx->misses = 0;
-        }
+        if (rx->fsw_hits & 1u) sync_at(rx, 0, errors);
+        return 0;
+    }
+    /* Until the next frame's FSW confirms a sync the hunt found, a cleaner FSW elsewhere
+     * replaces it: the first may have been noise, its LICH by chance one a frame can carry */
+    if (rx->tentative && errors < rx->sync_errors && rx->pos > NXDN_FSW_BITS) {
+        rx->false_syncs++;
+        sync_at(rx, 0, errors);
         return 0;
     }
     nxdn_set_bit(rx->frame, rx->pos, dibit >> 1);
     nxdn_set_bit(rx->frame, rx->pos + 1, dibit & 1u);
     rx->pos = (uint16_t)(rx->pos + 2);
+    if (rx->tentative && rx->pos == NXDN_FSW_BITS + NXDN_LICH_BITS && !lich_plausible(rx)) {
+        /* A sync the hunt found in noise (a 20-bit word within two errors turns up in
+         * about 5 % of 100 ms of noise) must not hold the receiver while the real one
+         * passes: without a LICH a frame can carry, hunt again from the FSWs seen since */
+        rx->false_syncs++;
+        rx->state = NXDN_RX_HUNT;
+        rx->tentative = false;
+        uint16_t since = rx->fsw_hits & ((1u << (NXDN_LICH_BITS / 2)) - 1u);
+        for (unsigned k = NXDN_LICH_BITS / 2; k-- > 0;)
+            if (since >> k & 1u) {
+                sync_at(rx, k, FSW_MAX_ERRORS);
+                break;
+            }
+        return 0;
+    }
     if (rx->pos == NXDN_FSW_BITS) {
         /* The next frame's FSW follows at once. The flywheel rides over a few damaged
          * ones; after that sync is lost, the call ends and the hunt starts again. */
-        if (popcount(rx->shift ^ NXDN_FSW) > 2 * FSW_MAX_ERRORS) {
+        if (errors > 2 * FSW_MAX_ERRORS) {
             if (++rx->misses > FLYWHEEL_FRAMES) {
                 rx->sync_losses++;
                 nxdn_rx_reset(rx);
                 return 0;
             }
-        } else rx->misses = 0;
+        } else {
+            rx->misses = 0;
+            rx->tentative = false;   /* a frame later, the FSW is there: confirmed */
+        }
     }
     if (rx->pos < NXDN_FRAME_BITS) return 0;
     process(rx);

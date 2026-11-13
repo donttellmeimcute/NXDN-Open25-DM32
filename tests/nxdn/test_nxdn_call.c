@@ -109,15 +109,15 @@ int main(void)
     assert(n_heard == 0 && rx.msg.cipher_type == 2 && rx.calls == 1 && rx.slots_muted == 16);
 
     /* Late entry: join after the header and part of a superframe. The VCALL is
-     * rebuilt from a whole superframe (four SACCH parts in order) */
+     * rebuilt from four SACCH parts, here from two superframes */
     n = make_call(dib, &cfg, 40, 0);
     n_heard = 0;
     nxdn_rx_init(&rx, 12, 200, 9, sink, NULL);
     unsigned skip = 2 * NXDN_FRAME_SYMBOLS + 37;     /* the header, one voice frame and a bit */
     feed(&rx, dib, n, skip);
     assert(rx.late_entries == 1 && rx.calls == 1);
-    /* the frames before the superframe completed are muted: frames 3-5 then superframe from frame 6 */
-    assert(n_heard > 0 && n_heard < 40 && !memcmp(heard, sent[40 - n_heard], n_heard * 9));
+    /* sync on voice frame 3: parts 2 and 3 (frames 3, 4), 0 and 1 (frames 5, 6); frames 6-10 play */
+    assert(n_heard == 20 && !memcmp(heard, sent[40 - n_heard], n_heard * 9));
 
     /* Channel errors: 1 in 200 bits flipped after the FSWs, everything still decodes */
     n = make_call(dib, &cfg, 40, 0);
@@ -139,6 +139,26 @@ int main(void)
     feed(&rx, dib, 8 * NXDN_FRAME_SYMBOLS, 0);
     assert(rx.sync_losses == 1 && !rx.in_call);
 
+    /* A frame sync word in the noise before the call (two bit errors, as noise makes in about 5 % of 100 ms) must
+     * not hold the receiver while the real header passes: the false one is dropped on its LICH. Placed so the
+     * real FSW starts 0, 3 and 7 dibits after it ends, or a whole frame later */
+    static uint8_t buf[40000];
+    unsigned call_n = make_call(dib, &cfg, 40, 0);
+    static const unsigned gaps[] = { 0, 3, 7, 60, 191 };
+    for (unsigned g = 0; g < sizeof gaps / sizeof *gaps; g++) {
+        unsigned m = 0;
+        for (unsigned i = 0; i < 300; i++) buf[m++] = (uint8_t)(next() & 3);
+        uint32_t w = NXDN_FSW ^ (1u << 3) ^ (1u << 14);
+        for (unsigned i = 0; i < 10; i++) buf[m++] = (uint8_t)((w >> (18 - 2 * i)) & 3u);
+        for (unsigned i = 0; i < gaps[g]; i++) buf[m++] = (uint8_t)(next() & 3);
+        memcpy(buf + m, dib, call_n);
+        m += call_n;
+        n_heard = 0;
+        nxdn_rx_init(&rx, 12, 200, 9, sink, NULL);
+        feed(&rx, buf, m, 0);
+        assert(rx.calls == 1 && !rx.late_entries && rx.false_syncs >= 1 && n_heard == 40 && !memcmp(heard, sent, 40 * 9));
+    }
+
     /* PTT released during the header: the call is still announced and released */
     nxdn_tx tx;
     nxdn_tx_begin(&tx, &cfg, 2);
@@ -149,6 +169,6 @@ int main(void)
     assert(tx.frames == 3 && !tx.voice_frames);
 
     printf("PASS NXDN calls: TX->RX, RAN/group/all-call/private filters, encrypted muted, late entry, %u bit errors, "
-           "sync loss, release during the header\n", flips);
+           "sync loss, false sync in noise, release during the header\n", flips);
     return 0;
 }
