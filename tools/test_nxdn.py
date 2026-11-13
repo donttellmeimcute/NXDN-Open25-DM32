@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""NXDN48 host tests: frame and call layers (ASan/UBSan), the modem and channel simulation, and the frame layer
+"""NXDN48 host tests: frame and call layers (ASan/UBSan), the modem and channel simulation, the link (TX ring and
+RX path the radio drives), and the frame layer
 against MMDVMHost's classes when research/protocol/MMDVMHost is present (tools/build_validators.sh). No radio."""
 from pathlib import Path
 import subprocess
@@ -12,7 +13,7 @@ RF = ROOT / "build/radiofoundry-p25/core"
 MMDVM = ROOT / "research/protocol/MMDVMHost"
 SAN = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"]
 CFLAGS = ["-std=c11", "-O1", "-g", "-Wall", "-Wextra", "-Werror", *SAN, "-I" + str(ROOT / "src/nxdn")]
-LIB = [ROOT / "src/nxdn/nxdn.c", ROOT / "src/nxdn/nxdn_call.c", ROOT / "src/nxdn/nxdn_modem.c"]
+LIB = [ROOT / "src/nxdn/nxdn.c", ROOT / "src/nxdn/nxdn_call.c", ROOT / "src/nxdn/nxdn_modem.c", ROOT / "src/nxdn/nxdn_link.c"]
 
 
 def run(args, **kw):
@@ -29,6 +30,8 @@ def main():
          RF / "dmr/ambe/ambeFec.c", "-lm",
          "-o", OUT / "test_nxdn_modem"])
     run([OUT / "test_nxdn_modem"])
+    run(["clang", *CFLAGS, "tests/nxdn/test_nxdn_link.c", *LIB, "-lm", "-o", OUT / "test_nxdn_link"])
+    run([OUT / "test_nxdn_link"])
     if not (MMDVM / "NXDNSACCH.cpp").exists():
         print("SKIP MMDVMHost oracle: research/protocol/MMDVMHost missing (tools/build_validators.sh)")
         return 0
