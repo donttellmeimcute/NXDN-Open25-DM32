@@ -11,7 +11,7 @@ oracles; nothing from them is linked into the firmware. No radio, serial port or
 |---|---|---|---|
 | dsd-fme | `34753963b8855c6c07b79250cb4de4f2c38a4613` (lwvmobile/dsd-fme) | P25 Phase 1, NXDN48 and P25 Phase 2 decoding of our streams | ISC (DSD) with GPL-2.0 files; not distributed |
 | mbelib | `9a04ed5c78176a9965f3d43f7aa1b1f5330e771f` (szechyjs/mbelib) | dsd-fme's vocoder library | ISC |
-| OP25 | `3f44d43eb449bb4753247ce848bb42a403823dea` (boatbod/op25) | CAI frame oracle (`tests/protocol`), trunking message reference | GPL-2.0-or-later / GPL-3.0-or-later |
+| OP25 | `3f44d43eb449bb4753247ce848bb42a403823dea` (boatbod/op25) | CAI frame oracle (`tests/protocol`), TSBK parser (`tk_p25.py`) and Phase 2 TDMA decoder (`apps/tdma`) run on our output | GPL-2.0-or-later / GPL-3.0-or-later |
 | MMDVMHost | `6ffa6d354a2c185316201c27c831c766a25a5653` (g4klx/MMDVMHost) | NXDN layer reference and oracle | GPL-2.0-or-later |
 
 Build them (Ubuntu 24.04 needs `libsndfile1-dev libncurses-dev libpulse-dev cmake`):
@@ -104,3 +104,37 @@ python3 -m unittest tests.test_nxdn_validation -v
 
 The frame layer is also checked against MMDVMHost's classes, in both directions and under bit errors
 (`python3 tools/test_nxdn.py`, `docs/nxdn-modem.md`).
+
+## P25 trunking signalling
+
+`tools/p25t_validate.py`:
+- **OP25:** `tk_p25.p25_system.decode_tsbk` (GNU Radio stubbed: the parser is plain Python) parses 10 outbound TSBK
+  types built by `src/p25t/tmsg.c`. Every value it reports equals the value put in: grant, grant update, unit
+  registration response, group affiliation response, RFSS and network status, de-registration acknowledge, and
+  three identifier update forms as the band plan OP25 stores.
+- **dsd-fme:** decodes a control channel stream from `src/p25t`: 18 TSDUs of one to three blocks with trellis code,
+  interleaving, CRC, NID and status symbols. All 18 are heard, and every message's values match.
+
+```sh
+python3 tools/p25t_validate.py --check
+python3 -m unittest tests.test_p25t_validation -v
+```
+
+## P25 Phase 2 (above the physical layer)
+
+`tools/p25p2_validate.py` (`results/p25p2-validation.json`): a voice channel's outbound stream from `src/p25p2`,
+with a call on each logical channel and 60 AMBE+2 frames each made from known parameter bits.
+
+| Decoder | Result |
+|---|---|
+| dsd-fme `-f2 -X BEE003A5293` | Every MAC PDU passes its RS and CRC-12. MAC_PTT ×2, MAC_ACTIVE with the voice channel user, MAC_END_PTT ×2 and the ESS (clear) on each channel. 62/62 AMBE+2 frames per channel equal to what was sent, 0 Golay corrections |
+| OP25 `apps/tdma` | Every ISCH (72 sync, 72 informational) and burst type recognized. 62/62 voice code words per channel equal to what was sent |
+
+```sh
+python3 tools/p25p2_validate.py --check
+python3 -m unittest tests.test_p25p2_validation -v
+```
+
+What these checks do not cover:
+- MAC_END_PTT's address fields, which dsd-fme does not print. They follow OP25's `p25p2_tdma.cc` layout.
+- The inbound (subscriber) burst structure, which neither decoder handles ([p25-phase2.md](p25-phase2.md)).

@@ -1,0 +1,78 @@
+{
+  "stream": {
+    "wacn": "BEE00",
+    "sysid": "3A5",
+    "nac": "293",
+    "calls": [
+      {
+        "channel": 0,
+        "group": 1234,
+        "source": 703710,
+        "padded": 2
+      },
+      {
+        "channel": 1,
+        "group": 4321,
+        "source": 777,
+        "padded": 2
+      }
+    ],
+    "frames_per_call": 60
+  },
+  "dsd_fme": {
+    "sync_lines": 42,
+    "channel_0": {
+      "mac_ptt": 2,
+      "mac_active_user": 3,
+      "mac_end_ptt": 2,
+      "end_closes_call": 1,
+      "ess_clear": 3,
+      "frames_sent": 62,
+      "frames_heard": 62,
+      "frames_matching": 62,
+      "golay_corrections": 0,
+      "match": true
+    },
+    "channel_1": {
+      "mac_ptt": 2,
+      "mac_active_user": 3,
+      "mac_end_ptt": 2,
+      "end_closes_call": 1,
+      "ess_clear": 3,
+      "frames_sent": 62,
+      "frames_heard": 62,
+      "frames_matching": 62,
+      "golay_corrections": 0,
+      "match": true
+    },
+    "match": true
+  },
+  "op25_tdma_python": {
+    "burst_types": {
+      "4v": 28,
+      "2v": 6,
+      "sacch w": 24,
+      "facch w": 86,
+      "unknown": 0
+    },
+    "isch": {
+      "sync": 72,
+      "info": 72,
+      "unknown": 0
+    },
+    "channel_0": {
+      "frames_sent": 62,
+      "frames_heard": 62,
+      "frames_matching": 62,
+      "match": true
+    },
+    "channel_1": {
+      "frames_sent": 62,
+      "frames_heard": 62,
+      "frames_matching": 62,
+      "match": true
+    },
+    "match": true
+  },
+  "match": true
+}

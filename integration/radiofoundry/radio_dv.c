@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* radio_dv.h: P25 on the native channel (native_lab.c owns the modem
- * sessions, p25_lab.c's worker runs the codec and frames) and NXDN48
- * (radio_nxdn.c), by the channel's mode. */
+ * sessions, p25_lab.c's worker runs the codec and frames), NXDN48
+ * (radio_nxdn.c) and P25 trunking (radio_p25t.c), by the channel's mode. */
 #include "radio_dv.h"
 #include "config.h"
 #include "hal_radio.h"
@@ -14,6 +14,9 @@
 #endif
 #if CONFIG_NXDN
 #include "radio_nxdn.h"
+#endif
+#if CONFIG_P25_TRUNK
+#include "radio_p25t.h"
 #endif
 
 #if CONFIG_P25_NATIVE
@@ -67,6 +70,9 @@ bool radio_dv_select(const radio_dv_cfg_t *cfg)
 #if CONFIG_NXDN
         if (current.mode == RADIO_MODE_NXDN) radio_nxdn_select(NULL);
 #endif
+#if CONFIG_P25_TRUNK
+        if (current.mode == RADIO_MODE_P25_TRUNK) radio_p25t_select(NULL);
+#endif
         selected = false;
     }
     if (!cfg) return true;
@@ -76,6 +82,9 @@ bool radio_dv_select(const radio_dv_cfg_t *cfg)
 #endif
 #if CONFIG_NXDN
     if (cfg->mode == RADIO_MODE_NXDN) ok = radio_nxdn_select(cfg);
+#endif
+#if CONFIG_P25_TRUNK
+    if (cfg->mode == RADIO_MODE_P25_TRUNK) ok = radio_p25t_select(cfg);
 #endif
     if (!ok) return false;
     current = *cfg;
@@ -92,6 +101,9 @@ bool radio_dv_ptt(bool down)
 #if CONFIG_NXDN
     if (current.mode == RADIO_MODE_NXDN) return radio_nxdn_ptt(down);
 #endif
+#if CONFIG_P25_TRUNK
+    if (current.mode == RADIO_MODE_P25_TRUNK) return radio_p25t_ptt(down);
+#endif
     (void)down;
     return false;
 }
@@ -106,6 +118,9 @@ void radio_dv_status(radio_dv_status_t *o, uint32_t now_ms)
 #if CONFIG_NXDN
     if (current.mode == RADIO_MODE_NXDN) radio_nxdn_status(o, now_ms);
 #endif
+#if CONFIG_P25_TRUNK
+    if (current.mode == RADIO_MODE_P25_TRUNK) radio_p25t_status(o, now_ms);
+#endif
     (void)now_ms;
 }
 
@@ -113,6 +128,9 @@ void radio_dv_service(uint32_t now_ms)
 {
 #if CONFIG_NXDN
     if (selected && current.mode == RADIO_MODE_NXDN) radio_nxdn_service(now_ms);
+#endif
+#if CONFIG_P25_TRUNK
+    if (selected && current.mode == RADIO_MODE_P25_TRUNK) radio_p25t_service(now_ms);
 #endif
     (void)now_ms;
 }
@@ -128,7 +146,12 @@ uint8_t radio_dv_tx_deny(uint8_t nt_reason)
         return TXDENY_REJECTED;    /* the board refused: band, calibration, battery, gate */
     case NT_LEASE:
     case NT_DEADLINE:
+    case RADIO_DV_TRUNK_NO_ANSWER:     /* the trunked system did not answer, or queued us too long */
         return TXDENY_TIMEOUT;
+    case RADIO_DV_TRUNK_REFUSED:       /* the system denied the call, or we are not registered on it */
+        return TXDENY_REJECTED;
+    case RADIO_DV_TRUNK_NO_TX:         /* trunked transmit is off in this build or for this channel */
+        return TXDENY_MODE;
     default:
         return TXDENY_NO_DMR;      /* the modem failed: shown as "modem" */
     }

@@ -1,0 +1,79 @@
+--- a/core/ui/ui_screens.c
++++ b/core/ui/ui_screens.c
+@@ -276,6 +276,18 @@
+ 	if (!v->dv.active) {
+ 		sb_str(&b, TR("Digital: not in this build"));
+ 		c = ui_col.warn;
++	} else if (v->ch.mode == RADIO_MODE_P25_TRUNK && v->dv.trunk == RDV_TRUNK_HUNT) {
++		sb_str(&b, TR("Searching for the site"));
++		c = ui_col.warn;
++	} else if (v->ch.mode == RADIO_MODE_P25_TRUNK && v->dv.trunk == RDV_TRUNK_REQUEST) {
++		sb_str(&b, TR("Requesting a channel"));
++	} else if (v->ch.mode == RADIO_MODE_P25_TRUNK && v->dv.trunk == RDV_TRUNK_QUEUED) {
++		sb_str(&b, TR("Queued by the system"));
++		c = ui_col.warn;
++	} else if (v->ch.mode == RADIO_MODE_P25_TRUNK && (!CONFIG_P25_TRUNK_TX || !v->dv.trunk_registered)) {
++		// On the site, listening: trunked transmit off in this build, or the system has not registered us
++		sb_str(&b, !CONFIG_P25_TRUNK_TX ? TR("Listen only") : TR("Not registered"));
++		c = ui_col.dim;
+ 	} else if (v->ch.rx_only) {
+ 		sb_str(&b, TR("RX only"));
+ 		c = ui_col.warn;
+--- a/core/ui/lang/es.po
++++ b/core/ui/lang/es.po
+@@ -3145,6 +3145,26 @@
+ msgstr "Digital: no incluido"
+ 
+ #: core/ui/ui_screens.c
++msgid "Searching for the site"
++msgstr "Buscando el sitio"
++
++#: core/ui/ui_screens.c
++msgid "Requesting a channel"
++msgstr "Pidiendo canal"
++
++#: core/ui/ui_screens.c
++msgid "Queued by the system"
++msgstr "En cola del sistema"
++
++#: core/ui/ui_screens.c
++msgid "Listen only"
++msgstr "Solo escucha"
++
++#: core/ui/ui_screens.c
++msgid "Not registered"
++msgstr "Sin registro"
++
++#: core/ui/ui_screens.c
+ msgid "No talkgroup"
+ msgstr "Sin grupo"
+ 
+--- a/core/ui/lang/it.po
++++ b/core/ui/lang/it.po
+@@ -3145,6 +3145,26 @@
+ msgstr "Digitale: non incluso"
+ 
+ #: core/ui/ui_screens.c
++msgid "Searching for the site"
++msgstr "Ricerca del sito"
++
++#: core/ui/ui_screens.c
++msgid "Requesting a channel"
++msgstr "Richiesta canale"
++
++#: core/ui/ui_screens.c
++msgid "Queued by the system"
++msgstr "In coda al sistema"
++
++#: core/ui/ui_screens.c
++msgid "Listen only"
++msgstr "Solo ascolto"
++
++#: core/ui/ui_screens.c
++msgid "Not registered"
++msgstr "Non registrata"
++
++#: core/ui/ui_screens.c
+ msgid "No talkgroup"
+ msgstr "Nessun gruppo"
+ 

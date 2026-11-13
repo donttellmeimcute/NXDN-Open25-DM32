@@ -18,6 +18,12 @@ static uint32_t voice_owner;
 static native_channel chan;
 static bool live_enabled, live_rx_pending, live_tx_pending;
 static uint32_t live_summary[5]; /* count, stop reason, blocks sent, PA keys, faults */
+#if CONFIG_P25_TRUNK_TX
+/* P25 trunking: the next (or running) transmit session is an inbound packet, not a voice call. Its sessions are
+ * counted apart so the radio core never takes one for the end of a call. */
+static bool live_inbound_pending, inbound_session;
+static uint32_t inbound_summary[2]; /* count, stop reason */
+#endif
 #if CONFIG_DEV_TX
 /* Laboratory gate: TX also needs the cable's enable this boot, 145.500 MHz
  * and the lowest power (firstboot_native_tx_config). */
@@ -124,12 +130,28 @@ static void live_next(radio_sm_t *sm)
     }
     live_tx_pending=false;
     if (!tx) live_rx_pending=false;
+#if CONFIG_P25_TRUNK_TX
+    bool inbound=tx && live_inbound_pending;
+    live_inbound_pending=false;
+    inbound_session=inbound;
+#else
+    bool inbound=false;
+#endif
     if ((tx || rx) && test.state==NT_FAULT) nt_reset(&test);
     uint32_t sid=0;
     if (tx && lab_gate_tx() && nt_arm_live(&test,chan.tx_hz,chan.power)) voice_owner=sid=test.session;
+#if CONFIG_P25_TRUNK_TX
+    else if (inbound) { inbound_summary[0]++;inbound_summary[1]=NT_DENIED;inbound_session=false; }
+#endif
     else if (tx) { live_summary[0]++;live_summary[1]=NT_DENIED;live_summary[2]=0;live_summary[3]=0;live_summary[4]++; }
     taskEXIT_CRITICAL();
-    if (sid && (!eligible(sm) || !p25_lab_live_begin(sid))) {
+#if CONFIG_P25_TRUNK_TX
+    if (sid && inbound && (!eligible(sm) || !p25_lab_inbound_begin(sid))) {
+        deny(sid);
+        native_lab_voice_release(sid);
+    } else
+#endif
+    if (sid && !inbound && (!eligible(sm) || !p25_lab_live_begin(sid))) {
         deny(sid);
         native_lab_voice_release(sid);
     }
@@ -196,10 +218,26 @@ int native_lab_channel(const native_channel *c)
     if (!c && test.owned) nt_cleanup(&test);
     return 1;
 }
+#if CONFIG_P25_TRUNK_TX
+int native_lab_channel_inbound(void)
+{
+    taskENTER_CRITICAL();
+    int ok=live_enabled && !live_owner() && !live_tx_pending;
+    if (ok) {
+        live_tx_pending=live_rx_pending=live_inbound_pending=true;
+        if (voice_owner) { pending_start=0;nt_stop(&test,test.session,NT_USER_STOP); }
+    }
+    taskEXIT_CRITICAL();
+    return ok;
+}
+#endif
 int native_lab_channel_ptt(bool down)
 {
     taskENTER_CRITICAL();
     int ok=live_enabled;
+#if CONFIG_P25_TRUNK_TX
+    if (ok && down) live_inbound_pending=false;
+#endif
     if (ok && down) {
         if (!live_owner()) {
             live_tx_pending=live_rx_pending=true;
@@ -223,6 +261,11 @@ void native_lab_channel_state(native_channel_state *s)
     s->receiving=voice_owner && !live_owner() && test.state==NT_RX;
     s->calls=live_summary[0];
     s->reason=(uint8_t)live_summary[1];
+#if CONFIG_P25_TRUNK_TX
+    s->inbound=live_owner() && inbound_session;
+    s->inbound_sent=inbound_summary[0];
+    if (s->inbound) s->transmitting=s->keyed=false;   /* an inbound packet is not a call */
+#endif
     s->blocks=live_summary[2];
     s->faults=live_summary[4];
     taskEXIT_CRITICAL();
@@ -294,6 +337,13 @@ int native_lab_voice_release(uint32_t sid)
     int released=0;
     taskENTER_CRITICAL();
     if (sid && sid==voice_owner && !test.owned && test.state!=NT_ARMED) {
+#if CONFIG_P25_TRUNK_TX
+        if (live_owner() && inbound_session) {
+            inbound_summary[0]++;
+            inbound_summary[1]=test.reason;
+            inbound_session=false;
+        } else
+#endif
         if (live_owner()) {
             live_summary[0]++;
             live_summary[1]=test.reason;

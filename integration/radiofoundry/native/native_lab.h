@@ -38,11 +38,18 @@ typedef struct {
     bool enabled, tx_pending, transmitting, keyed, receiving;
     uint8_t reason;          /* how the last transmission ended (NT_*) */
     uint32_t calls, blocks, faults;
+    bool inbound;            /* P25 trunking: an inbound packet is on air (not counted as a call) */
+    uint32_t inbound_sent;
 } native_channel_state;
 /* NULL leaves the channel: the session stops and the board is back in FM on
  * return. 0: a bench session or the updater has the modem. */
 int native_lab_channel(const native_channel *);
 int native_lab_channel_ptt(bool down);
+#if defined(CONFIG_P25_TRUNK_TX) && CONFIG_P25_TRUNK_TX
+/* P25 trunking: transmit the inbound packet p25_lab_inbound_load() holds on tx_hz now, then receive again. The
+ * radio core's channel must be a trunking channel; the same TX rules as PTT apply (eligible()). */
+int native_lab_channel_inbound(void);
+#endif
 void native_lab_channel_state(native_channel_state *);
 int native_lab_live_poll(uint32_t session, uint8_t *state, uint8_t *reason, uint8_t *queued);
 int native_lab_live_block(uint32_t session, const uint8_t raw[36], int last);

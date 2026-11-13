@@ -1,0 +1,223 @@
+--- a/core/radio/radio.h
++++ b/core/radio/radio.h
+@@ -193,7 +193,12 @@
+ 	uint16_t last_talkgroup;
+ 	uint32_t last_source;
+ 	uint32_t last_ms;	// hal_millis() of its end, 0 = none
++	// P25 trunking channels: where the radio is on the system (radio_dv_trunk_t) and whether the system took it
++	uint8_t trunk;
++	bool trunk_registered;
+ } radio_dv_view_t;
++// The trunking states, in the order the trunking logic numbers them (core/p25t/su.h)
++typedef enum { RDV_TRUNK_HUNT, RDV_TRUNK_SITE, RDV_TRUNK_CALL, RDV_TRUNK_REQUEST, RDV_TRUNK_QUEUED, RDV_TRUNK_TALK } radio_dv_trunk_t;
+ 
+ #if CONFIG_DMR_ROAMING
+ #define RADIO_ROAM_SITES	16	// = ROAM_SITES_MAX (radio/roam.h)
+--- a/core/radio/radio_sm.c
++++ b/core/radio/radio_sm.c
+@@ -842,7 +842,8 @@
+ // The digital voice modes this build has
+ static bool dv_mode_built(uint8_t mode)
+ {
+-	return (mode == RADIO_MODE_P25 && CONFIG_P25 && CONFIG_P25_NATIVE) || (mode == RADIO_MODE_NXDN && CONFIG_NXDN);
++	return (mode == RADIO_MODE_P25 && CONFIG_P25 && CONFIG_P25_NATIVE) || (mode == RADIO_MODE_NXDN && CONFIG_NXDN) ||
++	       (mode == RADIO_MODE_P25_TRUNK && CONFIG_P25_TRUNK);
+ }
+ 
+ static void dv_begin(radio_sm_t *sm)
+@@ -851,7 +852,7 @@
+ 	radio_dv_cfg_t c = {
+ 		.mode = ch->mode, .rx_hz = ch->rx_hz, .tx_hz = ch->tx_hz, .power = sm->view.power,
+ 		.nac_rx = ch->nac_rx, .nac_tx = ch->nac_tx, .talkgroup = ch->talkgroup, .unit_id = dv_unit_id(ch),
+-		.hear_all = ch->hear_all,
++		.hear_all = ch->hear_all, .wacn = ch->wacn, .sysid = ch->sysid,
+ 	};
+ 	sm->dv_running = radio_dv_select(&c);
+ 	memset(&sm->view.dv, 0, sizeof(sm->view.dv));
+@@ -877,7 +878,8 @@
+ 	// P25 / NXDN: CARRIER refuses while frames of any NAC (RAN) are heard; WRONG_TONE ("NAC") while frames of another
+ 	// NAC (RAN) are, the channel used by a group we don't hear (as an FM carrier without our tone). Our own NAC's (RAN's)
+ 	// call: talk back
+-	if (sm->dv_running && sm->set.bcl != RADIO_BCL_OFF) {
++	// Trunking: the system hands out the channels, nothing to lock out
++	if (sm->dv_running && sm->set.bcl != RADIO_BCL_OFF && sm->view.ch.mode != RADIO_MODE_P25_TRUNK) {
+ 		radio_dv_status_t s;
+ 		radio_dv_status(&s, sm->dv_now_ms);
+ 		return sm->set.bcl == RADIO_BCL_CARRIER ? s.sync : (s.sync && !s.sync_ours);
+@@ -921,10 +923,16 @@
+ #if RADIO_SM_DV
+ 	if (codeplug_mode_digital_voice(ch->mode)) {
+ 		if (!dv_mode_built(ch->mode) || !sm->dv_running) {
+-			return TXDENY_MODE;		// trunking comes later; or the channel's session didn't start
++			return TXDENY_MODE;		// not in this build, or the channel's session didn't start
++		}
++		if (ch->mode == RADIO_MODE_P25_TRUNK && !CONFIG_P25_TRUNK_TX) {
++			return TXDENY_MODE;		// trunked transmit is a separate switch, off by default (receive only)
+ 		}
+ 		if (dv_unit_id(ch) == 0 || ch->talkgroup == 0) {
+ 			return TXDENY_NO_ID;		// a P25 call needs our unit ID and a talkgroup (TIA-102.BAAD-B 6.1.1.1)
++		}
++		if (ch->mode == RADIO_MODE_P25_TRUNK && (ch->wacn == 0 || ch->sysid == 0)) {
++			return TXDENY_NO_ID;		// and a trunked one the system's WACN and System ID, as the user entered them
+ 		}
+ 		if (ch->mode == RADIO_MODE_NXDN && dv_unit_id(ch) > NXDN_UNIT_MAX) {
+ 			return TXDENY_NO_ID;		// NXDN unit IDs are 16 bits, 1-65519: set the channel's own ID
+@@ -1006,6 +1014,11 @@
+ 	radio_dv_status(&s, now_ms);
+ 	if (s.active != v->active) {
+ 		v->active = s.active;
++		changed(sm);
++	}
++	if (sm->view.ch.mode == RADIO_MODE_P25_TRUNK && (s.trunk_state != v->trunk || s.trunk_registered != v->trunk_registered)) {
++		v->trunk = s.trunk_state;
++		v->trunk_registered = s.trunk_registered;
+ 		changed(sm);
+ 	}
+ 	if (sm->view.state == RS_TX) {
+--- a/tests/host/radioCoreTest.c
++++ b/tests/host/radioCoreTest.c
+@@ -4664,7 +4664,9 @@
+ }
+ uint8_t radio_dv_tx_deny(uint8_t r)
+ {
+-	return r == 0 || r == NT_USER_STOP_ || r == NT_TX_COMPLETE_ ? TXDENY_NONE : r == NT_DENIED_ ? TXDENY_REJECTED : TXDENY_NO_DMR;
++	return r == 0 || r == NT_USER_STOP_ || r == NT_TX_COMPLETE_ ? TXDENY_NONE :
++	       r == NT_DENIED_ || r == RADIO_DV_TRUNK_REFUSED ? TXDENY_REJECTED :
++	       r == RADIO_DV_TRUNK_NO_ANSWER ? TXDENY_TIMEOUT : r == RADIO_DV_TRUNK_NO_TX ? TXDENY_MODE : TXDENY_NO_DMR;
+ }
+ static void dv_tx_ended(uint8_t reason)
+ {
+@@ -4781,6 +4783,89 @@
+ }
+ #endif
+ 
++#if CONFIG_P25_TRUNK
++// P25 trunking channels: the system goes to radio_dv.h; transmit only in a CONFIG_P25_TRUNK_TX build, with the
++// whole identity entered; no busy lockout (the system hands out the channels)
++static void test_p25_trunk_channel(void)
++{
++	setup_codeplug();
++	add(3, "Site 1", 460112500, RADIO_MODE_P25_TRUNK, false, 1);	// UHF: the radio has no 800 MHz
++	chans[3].tx_hz = 465112500;
++	chans[3].nac_rx = 0x293;
++	chans[3].talkgroup = 100;
++	chans[3].wacn = 0xBEE00;
++	chans[3].sysid = 0x3A5;
++	start();
++	memset(&dv, 0, sizeof(dv));
++	uint32_t id = own_dmr_id;
++	own_dmr_id = 1001;
++	req(RREQ_ZONE_POS, 2);
++	run(30);
++	CHECK(sm.view.ch.mode == RADIO_MODE_P25_TRUNK && sm.dv_running && dv.cfg.mode == RADIO_MODE_P25_TRUNK);
++	CHECK(dv.cfg.rx_hz == 460112500 && dv.cfg.tx_hz == 465112500 && dv.cfg.wacn == 0xBEE00 && dv.cfg.sysid == 0x3A5);
++	CHECK(dv.cfg.unit_id == 1001 && dv.cfg.talkgroup == 100);
++
++	// A call the trunking logic followed plays
++	dv_heard(true, true, 100, 5555);
++	run(30);
++	CHECK(sm.view.state == RS_RX && sm.view.dv.source == 5555);
++	dv_quiet();
++	run(30);
++	CHECK(sm.view.state == RS_IDLE);
++
++	// Busy lockout does not apply: another NAC heard on the control channel is the system, not a busy channel
++	sm.set.bcl = RADIO_BCL_CARRIER;
++	dv_heard(false, false, 0, 0);
++	run(30);
++	req(RREQ_PTT, 1);
++#if CONFIG_P25_TRUNK_TX
++	CHECK(sm.view.state == RS_TX && dv.downs == 1);
++	// the system refuses: shown until PTT is released
++	dv_tx_ended(RADIO_DV_TRUNK_REFUSED);
++	run(20);
++	CHECK(sm.view.state == RS_TX_DENIED && sm.view.tx_deny == TXDENY_REJECTED);
++	req(RREQ_PTT, 0);
++	run(20);
++	CHECK(sm.view.state != RS_TX_DENIED);
++	// no answer
++	req(RREQ_PTT, 1);
++	CHECK(dv.downs == 2);
++	dv_tx_ended(RADIO_DV_TRUNK_NO_ANSWER);
++	run(20);
++	CHECK(sm.view.state == RS_TX_DENIED && sm.view.tx_deny == TXDENY_TIMEOUT);
++	req(RREQ_PTT, 0);
++	run(20);
++	// granted: a call, then its end
++	req(RREQ_PTT, 1);
++	CHECK(sm.view.state == RS_TX && dv.downs == 3);
++	run(500);
++	req(RREQ_PTT, 0);
++	dv_tx_ended(NT_TX_COMPLETE_);
++	run(20);
++	CHECK(sm.view.state == RS_IDLE);
++	// without the system's identity (WACN, System ID): refused before anything is asked
++	chans[3].wacn = 0;
++	req(RREQ_ZONE_POS, 0);
++	run(30);
++	req(RREQ_ZONE_POS, 2);
++	run(30);
++	req(RREQ_PTT, 1);
++	CHECK(sm.view.state == RS_TX_DENIED && sm.view.tx_deny == TXDENY_NO_ID && dv.downs == 3);
++	req(RREQ_PTT, 0);
++#else
++	// receive only: PTT never reaches the channel
++	CHECK(sm.view.state == RS_TX_DENIED && sm.view.tx_deny == TXDENY_MODE && dv.downs == 0);
++	req(RREQ_PTT, 0);
++#endif
++	sm.set.bcl = RADIO_BCL_OFF;
++	dv_quiet();
++	own_dmr_id = id;
++	req(RREQ_ZONE_POS, 0);
++	run(30);
++	CHECK(!sm.dv_running);
++}
++#endif
++
+ #if CONFIG_P25 && CONFIG_P25_NATIVE
+ static void test_p25_channel(void)
+ {
+@@ -4930,6 +5015,9 @@
+ #endif
+ #if RADIO_SM_DV && CONFIG_NXDN
+ 	test_nxdn_channel();
++#endif
++#if RADIO_SM_DV && CONFIG_P25_TRUNK
++	test_p25_trunk_channel();
+ #endif
+ 	test_startup();
+ 	test_persist();
+--- a/tests/host/Makefile
++++ b/tests/host/Makefile
+@@ -196,6 +196,14 @@
+ radioCoreTestNXDN: $(RCORE) $(wildcard $(CORE)/radio/*.h) $(wildcard $(CORE)/dmr/call/*.h) $(CORE)/dmr/dmrDataService.h \
+                   $(CORE)/ui/ui_svc.h $(CORE)/dv/radio_dv.h
+ 	$(CC) $(CFLAGS) $(CORE_HAL) -I. -DDMR_RX_TRACE=0 -DCONFIG_DMR_IP_GATEWAY=0 -DCONFIG_SFR=1 -DCONFIG_APRS=0 -DCONFIG_NXDN=1 -o $@ $(RCORE) -lm
++# P25 trunking channels, receive only (the default) and with trunked transmit
++TESTS   += radioCoreTestP25T radioCoreTestP25TX
++radioCoreTestP25T: $(RCORE) $(wildcard $(CORE)/radio/*.h) $(wildcard $(CORE)/dmr/call/*.h) $(CORE)/dmr/dmrDataService.h \
++                   $(CORE)/ui/ui_svc.h $(CORE)/dv/radio_dv.h
++	$(CC) $(CFLAGS) $(CORE_HAL) -I. -DDMR_RX_TRACE=0 -DCONFIG_DMR_IP_GATEWAY=0 -DCONFIG_SFR=1 -DCONFIG_APRS=0 -DCONFIG_P25=1 -DCONFIG_P25_NATIVE=1 -DCONFIG_NXDN=1 -DCONFIG_P25_TRUNK=1 -o $@ $(RCORE) -lm
++radioCoreTestP25TX: $(RCORE) $(wildcard $(CORE)/radio/*.h) $(wildcard $(CORE)/dmr/call/*.h) $(CORE)/dmr/dmrDataService.h \
++                    $(CORE)/ui/ui_svc.h $(CORE)/dv/radio_dv.h
++	$(CC) $(CFLAGS) $(CORE_HAL) -I. -DDMR_RX_TRACE=0 -DCONFIG_DMR_IP_GATEWAY=0 -DCONFIG_SFR=1 -DCONFIG_APRS=0 -DCONFIG_P25=1 -DCONFIG_P25_NATIVE=1 -DCONFIG_NXDN=1 -DCONFIG_P25_TRUNK=1 -DCONFIG_P25_TRUNK_TX=1 -o $@ $(RCORE) -lm
+ 
+ # The everyday features (scan, beeps, battery, TOT warning, BCL, roger beep, 1750 Hz burst, VOX, battery saving)
+ TESTS   += radioFeaturesTest
+@@ -290,13 +298,15 @@
+ 	$(CC) $(CFLAGS) -I$(ROOT)/hal -Wshadow -o $@ boardBandTest.c
+ 
+ run: run-core
+-run-core: radioCoreTest radioCoreTestNoVfoDmr radioCoreTestP25 radioCoreTestNXDN radioFeaturesTest radioFeaturesTestNoDual roamTest radioListenBandsTest inputTest aprsRadioTest quadratureTest serialmicTest miclevelTest \
++run-core: radioCoreTest radioCoreTestNoVfoDmr radioCoreTestP25 radioCoreTestNXDN radioCoreTestP25T radioCoreTestP25TX radioFeaturesTest radioFeaturesTestNoDual roamTest radioListenBandsTest inputTest aprsRadioTest quadratureTest serialmicTest miclevelTest \
+           rx2LinkTest keyassignTest powerSwitchTest boardBandTest batteryTest
+ 	./aprsRadioTest
+ 	./radioCoreTest
+ 	./radioCoreTestNoVfoDmr
+ 	./radioCoreTestP25
+ 	./radioCoreTestNXDN
++	./radioCoreTestP25T
++	./radioCoreTestP25TX
+ 	./radioFeaturesTest
+ 	./radioFeaturesTestNoDual
+ 	./roamTest
