@@ -25,6 +25,26 @@ int16_t nxdn_hpf_inverse_step(nxdn_hpf_inverse *h, int16_t y)
     return (int16_t)(x > 32767 ? 32767 : x < -32768 ? -32768 : x);
 }
 
+void nxdn_deemph_inverse_init(nxdn_deemph_inverse *e, uint16_t tau_us)
+{
+    memset(e, 0, sizeof *e);
+    if (!tau_us) return;
+    /* 2 tau fs = 16 tau_us / 1000: a = (16 tau - 1000) / (16 tau + 1000), 1 / (1 - a) = (16 tau + 1000) / 2000 */
+    int32_t k = 16 * (int32_t)tau_us;
+    if (k <= 1000) return;          /* a corner above 2.5 kHz: nothing to undo in the symbol band */
+    e->a_q15 = (int32_t)(((int64_t)(k - 1000) << 15) / (k + 1000));
+    e->inv_q12 = (int32_t)(((int64_t)(k + 1000) << 12) / 2000);
+}
+
+int16_t nxdn_deemph_inverse_step(nxdn_deemph_inverse *e, int16_t y)
+{
+    if (!e->a_q15) return y;
+    int32_t d = (int32_t)y - (int32_t)(((int64_t)e->prev * e->a_q15) >> 15);
+    e->prev = y;
+    int32_t x = (int32_t)(((int64_t)d * e->inv_q12) >> 12);
+    return (int16_t)(x > 32767 ? 32767 : x < -32768 ? -32768 : x);
+}
+
 static const int8_t level[4] = { 1, 3, -1, -3 };   /* dibit 00 +1, 01 +3, 10 -1, 11 -3 */
 
 void nxdn_mod_init(nxdn_mod *m, int32_t gain_q8)
@@ -125,7 +145,7 @@ size_t nxdn_demod_samples(nxdn_demod *d, const int16_t *in, size_t n, uint8_t *d
 {
     size_t w = 0;
     for (size_t s = 0; s < n; s++) {
-        d->ring[d->count & 63u] = nxdn_hpf_inverse_step(&d->post, in[s]);
+        d->ring[d->count & 63u] = nxdn_hpf_inverse_step(&d->post, nxdn_deemph_inverse_step(&d->deemph, in[s]));
         d->count++;
         /* every instant whose filter span is now in the ring */
         while (w < cap && (d->t_on >> 16) + NXDN_RX_HALF <= (int64_t)d->count - 1) {

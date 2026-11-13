@@ -8,7 +8,8 @@
  *   TX  dibits -> levels -> root-raised-cosine (0.2) x sin(x)/x pulse, 10-phase
  *       polyphase -> int16 samples, `gain` LSB per 1/256 Hz [-> inverse of the
  *       transmit audio path's high-pass]
- *   RX  int16 samples [-> inverse of the receive audio path's high-pass] ->
+ *   RX  int16 samples [-> inverses of the receive audio path's de-emphasis and
+ *       high-pass] ->
  *       root-raised cosine x x/sin(x) evaluated at interpolated
  *       instants -> Gardner timing loop -> DC (frequency offset) and level
  *       tracking -> hard dibits
@@ -43,6 +44,19 @@ enum { NXDN_RX_LEAK = 10, NXDN_TX_LEAK = 7 };
 void nxdn_hpf_inverse_init(nxdn_hpf_inverse *h, uint16_t corner_hz, uint8_t leak_shift);
 int16_t nxdn_hpf_inverse_step(nxdn_hpf_inverse *h, int16_t y);
 
+/* Undoing a receiver's de-emphasis (a one-pole low-pass of time constant tau,
+ * 750 us in FM voice): x[n] = (y[n] - a y[n-1]) / (1 - a), with the
+ * bilinear-matched pole a = (2 tau fs - 1) / (2 tau fs + 1). It lifts the
+ * band above the corner again; what it lifts beyond the symbol band, the
+ * matched filter removes. */
+typedef struct {
+    int32_t a_q15;         /* 0 = off */
+    int32_t inv_q12;       /* 1 / (1 - a), Q12 */
+    int32_t prev;
+} nxdn_deemph_inverse;
+void nxdn_deemph_inverse_init(nxdn_deemph_inverse *e, uint16_t tau_us);
+int16_t nxdn_deemph_inverse_step(nxdn_deemph_inverse *e, int16_t y);
+
 typedef struct {
     int8_t sym[16];        /* the last symbols, ring indexed by count */
     uint32_t symbols;      /* symbols pushed */
@@ -68,6 +82,7 @@ typedef struct {
     uint32_t symbols;
     int32_t last_error;    /* Gardner error of the last symbol (diagnostic) */
     nxdn_hpf_inverse post; /* compensation of the receive audio path's high-pass */
+    nxdn_deemph_inverse deemph;  /* ... and of its de-emphasis */
 } nxdn_demod;
 
 void nxdn_demod_init(nxdn_demod *d);

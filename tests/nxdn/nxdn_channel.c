@@ -5,7 +5,7 @@
  * frequency-modulate a complex carrier at 48 kHz with the deviation scaled by
  * dev_scale and a carrier offset; complex white noise sets the carrier-to-noise
  * ratio in a 12.5 kHz bandwidth; a 12.5 kHz channel filter, an ideal
- * discriminator and a 3.4 kHz audio low-pass follow, then decimation to 8 kHz
+ * discriminator, optional de-emphasis and a 3.4 kHz audio low-pass follow, then decimation to 8 kHz
  * and the chip's audio chain: a first-order high-pass, gain and clipping to
  * int16. Optional first-order high-pass on the transmit side too, and noise
  * alone for a while before the carrier appears (the receiver idling). */
@@ -97,6 +97,11 @@ size_t nxdn_channel_run48(const nxdn_channel_cfg *c, const double *dev48, size_t
         double a = fre[i] * fre[i - 1] + fim[i] * fim[i - 1];
         double b = fim[i] * fre[i - 1] - fre[i] * fim[i - 1];
         disc[i] = atan2(b, a) * FS48 / (2 * M_PI);
+    }
+    if (c->rx_deemph_us > 0) {
+        /* the receiver's de-emphasis: a one-pole low-pass on the discriminator, before its audio filter */
+        double a = exp(-1.0 / (c->rx_deemph_us * 1e-6 * FS48)), y = 0;
+        for (size_t i = 0; i < n48; i++) disc[i] = y = a * y + (1 - a) * disc[i];
     }
     fir(disc, n48, h_aud, 191, aud);
     size_t n8 = n48 / UP;

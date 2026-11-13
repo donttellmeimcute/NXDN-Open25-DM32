@@ -11,6 +11,7 @@ typedef struct {
     double dev_scale;     /* transmitted deviation / nominal */
     double tx_hpf_hz;     /* first-order high-pass in the transmit audio path, 0 = none */
     double rx_hpf_hz;     /* first-order high-pass in the receive audio path, 0 = none */
+    double rx_deemph_us;  /* the receiver's de-emphasis time constant, 0 = none (flat discriminator) */
     double rx_gain;       /* receive audio LSB per Hz */
     double clip;          /* receive audio clipping level in LSB, 0 = int16 limits */
     double lead_s;        /* noise alone before the carrier, seconds (output grows by lead_s x 8000) */

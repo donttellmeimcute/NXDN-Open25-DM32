@@ -115,6 +115,7 @@ static size_t phy4800(unsigned ndib, double *out48)
 }
 
 static uint16_t comp_rx_hz, comp_tx_hz;   /* high-pass corners the modem compensates (0 = none) */
+static uint16_t comp_deemph_us;           /* de-emphasis the demodulator undoes (0 = none) */
 static uint8_t tx_leak = NXDN_TX_LEAK;
 
 static void run(unsigned route, const nxdn_channel_cfg *c, unsigned frames, sim_result *r)
@@ -139,6 +140,7 @@ static void run(unsigned route, const nxdn_channel_cfg *c, unsigned frames, sim_
     nxdn_demod d;
     nxdn_demod_init(&d);
     nxdn_hpf_inverse_init(&d.post, comp_rx_hz, NXDN_RX_LEAK);
+    nxdn_deemph_inverse_init(&d.deemph, comp_deemph_us);
     /* The receiver idles on noise, then the squelch opens SQUELCH_MS into the carrier: reacquire */
     size_t lead8 = (size_t)(c->lead_s * 8000), open = lead8 ? lead8 + SQUELCH_MS * 8 : 0;
     size_t nd = nxdn_demod_samples(&d, rx8, open, rxdib, MAX_DIB);
@@ -178,30 +180,34 @@ static void run(unsigned route, const nxdn_channel_cfg *c, unsigned frames, sim_
 
 static nxdn_channel_cfg cfg(double cnr, double off, double dev, double rx_hpf, double clip, uint64_t seed)
 {
-    nxdn_channel_cfg c = { cnr, off, dev, 0, rx_hpf, 8.0, clip, LEAD_S, seed };
+    nxdn_channel_cfg c = { cnr, off, dev, 0, rx_hpf, 0, 8.0, clip, LEAD_S, seed };
     return c;
 }
 
 static void sweep(void)
 {
     static const double cnr[] = { 6, 8, 10, 12, 14, 16, 20, 30 };
-    const struct { const char *name; double off, dev, tx_hpf, rx_hpf, clip; uint16_t comp_tx, comp_rx; } imp[] = {
-        { "clean audio path", 0, 1.0, 0, 0, 0, 0, 0 },
-        { "offset +500 Hz", 500, 1.0, 0, 0, 0, 0, 0 },
-        { "deviation +20%", 0, 1.2, 0, 0, 0, 0, 0 },
-        { "deviation -20%", 0, 0.8, 0, 0, 0, 0, 0 },
-        { "RX high-pass 20 Hz", 0, 1.0, 0, 20, 0, 0, 0 },
-        { "RX high-pass 100 Hz", 0, 1.0, 0, 100, 0, 0, 0 },
-        { "RX high-pass 300 Hz", 0, 1.0, 0, 300, 0, 0, 0 },
-        { "TX high-pass 100 Hz", 0, 1.0, 100, 0, 0, 0, 0 },
-        { "RX high-pass 100 Hz, compensated", 0, 1.0, 0, 100, 0, 0, 100 },
-        { "RX high-pass 300 Hz, compensated", 0, 1.0, 0, 300, 0, 0, 300 },
-        { "RX high-pass 100 Hz, compensated as 80 Hz", 0, 1.0, 0, 100, 0, 0, 80 },
-        { "TX high-pass 100 Hz, pre-compensated", 0, 1.0, 100, 0, 0, 100, 0 },
-        { "TX high-pass 300 Hz, pre-compensated", 0, 1.0, 300, 0, 0, 300, 0 },
-        { "TX and RX high-pass 300 Hz, both compensated", 0, 1.0, 300, 300, 0, 300, 300 },
-        { "RX clipped at 80% of +-1050 Hz", 0, 1.0, 0, 0, 0.8 * 1050 * 8, 0, 0 },
-        { "all: +300 Hz, -10% dev, RX HP 50 Hz (comp.), clip 90%", 300, 0.9, 0, 50, 0.9 * 1050 * 8, 0, 50 },
+    const struct { const char *name; double off, dev, tx_hpf, rx_hpf, clip; uint16_t comp_tx, comp_rx; double deemph;
+                   uint16_t comp_deemph; } imp[] = {
+        { "clean audio path", 0, 1.0, 0, 0, 0, 0, 0, 0, 0 },
+        { "offset +500 Hz", 500, 1.0, 0, 0, 0, 0, 0, 0, 0 },
+        { "deviation +20%", 0, 1.2, 0, 0, 0, 0, 0, 0, 0 },
+        { "deviation -20%", 0, 0.8, 0, 0, 0, 0, 0, 0, 0 },
+        { "RX high-pass 20 Hz", 0, 1.0, 0, 20, 0, 0, 0, 0, 0 },
+        { "RX high-pass 100 Hz", 0, 1.0, 0, 100, 0, 0, 0, 0, 0 },
+        { "RX high-pass 300 Hz", 0, 1.0, 0, 300, 0, 0, 0, 0, 0 },
+        { "TX high-pass 100 Hz", 0, 1.0, 100, 0, 0, 0, 0, 0, 0 },
+        { "RX high-pass 100 Hz, compensated", 0, 1.0, 0, 100, 0, 0, 100, 0, 0 },
+        { "RX high-pass 300 Hz, compensated", 0, 1.0, 0, 300, 0, 0, 300, 0, 0 },
+        { "RX high-pass 100 Hz, compensated as 80 Hz", 0, 1.0, 0, 100, 0, 0, 80, 0, 0 },
+        { "TX high-pass 100 Hz, pre-compensated", 0, 1.0, 100, 0, 0, 100, 0, 0, 0 },
+        { "TX high-pass 300 Hz, pre-compensated", 0, 1.0, 300, 0, 0, 300, 0, 0, 0 },
+        { "TX and RX high-pass 300 Hz, both compensated", 0, 1.0, 300, 300, 0, 300, 300, 0, 0 },
+        { "RX clipped at 80% of +-1050 Hz", 0, 1.0, 0, 0, 0.8 * 1050 * 8, 0, 0, 0, 0 },
+        { "RX de-emphasis 750 us", 0, 1.0, 0, 0, 0, 0, 0, 750, 0 },
+        { "RX de-emphasis 750 us, compensated", 0, 1.0, 0, 0, 0, 0, 0, 750, 750 },
+        { "RX de-emphasis 750 us and high-pass 300 Hz, both compensated", 0, 1.0, 0, 300, 0, 0, 300, 750, 750 },
+        { "all: +300 Hz, -10% dev, RX HP 50 Hz (comp.), clip 90%", 300, 0.9, 0, 50, 0.9 * 1050 * 8, 0, 50, 0, 0 },
     };
     const unsigned frames = 50;   /* 4 s */
     for (unsigned route = 0; route < 2; route++) {
@@ -222,6 +228,8 @@ static void sweep(void)
                 c.tx_hpf_hz = imp[k].tx_hpf;
                 comp_tx_hz = imp[k].comp_tx;
                 comp_rx_hz = imp[k].comp_rx;
+                c.rx_deemph_us = imp[k].deemph;
+                comp_deemph_us = imp[k].comp_deemph;
                 sim_result r;
                 rnd = 0xA5A5A5u + i * 77 + k;
                 run(route, &c, frames, &r);
