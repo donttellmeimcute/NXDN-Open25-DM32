@@ -23,6 +23,11 @@ typedef struct {
     p25_pcm_sink sink;
     void *sink_ctx;
     uint16_t group_filter; /* 0 = all group voice; implementation policy */
+    uint16_t nac_filter;   /* P25_NAC_ANY or the channel NAC; the framer hears every NAC */
+    /* Channel activity for the radio core (busy lockout, scan, display). */
+    uint16_t last_nac;     /* NAC of the last valid frame, P25_NAC_ANY before any */
+    uint8_t last_duid, playing, emergency, encrypted;
+    uint32_t foreign_frames; /* valid frames with another NAC: counted, never played */
     uint16_t active_nac;
     uint16_t active_group;
     uint32_t active_source;
@@ -37,6 +42,9 @@ typedef struct {
     uint32_t fec_max_us, imbe_max_us;
 } p25_voice;
 
+/* nac: the channel's RX NAC (0xF7E or P25_NAC_ANY hears every NAC). Frames
+ * with another NAC complete in the framer for the activity fields above but
+ * never reach admission or the sink. */
 void p25_voice_init(p25_voice *v, uint16_t nac, uint16_t group,
                     p25_pcm_sink sink, void *ctx);
 /* Clear RX admission/timing after tuning, a discontinuity, or carrier loss.
