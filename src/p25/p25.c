@@ -192,7 +192,19 @@ size_t p25_frame_bytes(uint8_t duid)
     }
 }
 
+static int nid_decode(uint64_t air_nid, p25_nid *result, int any_duid);
+
 int p25_nid_decode(uint64_t air_nid, p25_nid *result)
+{
+    return nid_decode(air_nid, result, 0);
+}
+
+int p25_nid_decode_any(uint64_t air_nid, p25_nid *result)
+{
+    return nid_decode(air_nid, result, 1);
+}
+
+static int nid_decode(uint64_t air_nid, p25_nid *result, int any_duid)
 {
     uint64_t cw = air_nid >> 1, corrected;
     uint8_t s[22] = {0}, lambda[23];
@@ -213,7 +225,7 @@ int p25_nid_decode(uint64_t air_nid, p25_nid *result)
     }
     corrected = p25_nid_encode((uint16_t)(cw >> 51), (uint8_t)(cw >> 47));
     differences = popcount64(corrected ^ air_nid);
-    if (differences > 11 || !p25_frame_bytes((uint8_t)((cw >> 47) & 15))) return -1;
+    if (differences > 11 || (!any_duid && !p25_frame_bytes((uint8_t)((cw >> 47) & 15)))) return -1;
     result->nac = (uint16_t)(cw >> 51);
     result->duid = (uint8_t)((cw >> 47) & 15);
     result->corrected_bits = (uint8_t)differences;

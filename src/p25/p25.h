@@ -67,6 +67,8 @@ uint64_t p25_nid_encode(uint16_t nac, uint8_t duid);
  * Only conventional voice DUIDs listed above are accepted by this API.
  */
 int p25_nid_decode(uint64_t air_nid, p25_nid *result);
+/* The same for any DUID (trunking: TSDU 0x7, PDU 0xc); the NID parity still has to match */
+int p25_nid_decode_any(uint64_t air_nid, p25_nid *result);
 size_t p25_frame_bytes(uint8_t duid);
 
 int p25_encode_hdu(const p25_call *call, uint8_t out[P25_HDU_BYTES]);
