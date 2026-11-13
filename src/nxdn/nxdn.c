@@ -12,6 +12,17 @@ void nxdn_put_fsw(uint8_t f[NXDN_FRAME_BYTES])
     for (unsigned i = 0; i < NXDN_FSW_BITS; i++) nxdn_set_bit(f, i, (NXDN_FSW >> (19 - i)) & 1u);
 }
 
+uint8_t nxdn_preamble_dibit(unsigned i, unsigned n)
+{
+    static const uint8_t pre[3] = { 0x57u, 0x75u, 0xFDu };
+    if (i + 12u >= n) {
+        unsigned k = i + 12u - n;                       /* 0..11 within 0x5775FD */
+        return (uint8_t)((pre[k / 4u] >> (6u - 2u * (k % 4u))) & 3u);
+    }
+    /* dotting, ending on -3 where the preamble's +3 starts: count back from it */
+    return (n - 12u - 1u - i) % 2u ? 1u : 3u;
+}
+
 /* --- LICH --- */
 uint8_t nxdn_lich_pack(const nxdn_lich *l)
 {

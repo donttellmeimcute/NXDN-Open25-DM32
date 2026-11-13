@@ -11,7 +11,7 @@
  *   RX  int16 samples [-> inverses of the receive audio path's de-emphasis and
  *       high-pass] ->
  *       root-raised cosine x x/sin(x) evaluated at interpolated
- *       instants -> Gardner timing loop -> DC (frequency offset) and level
+ *       instants -> Gardner timing loop on zero crossings -> DC (frequency offset) and level
  *       tracking -> hard dibits
  *
  * Integer arithmetic only (the CK803S has no FPU). Tables from
@@ -78,6 +78,7 @@ typedef struct {
     uint32_t count;        /* samples in */
     int64_t t_on;          /* next symbol instant, samples in Q16 */
     int32_t prev_on;       /* matched filter output at the last instant */
+    int32_t last4[4];      /* ... at the last four (the acquisition's offset) */
     int32_t dc, outer, amp;  /* level tracking: offset, outer level (3 units), threshold (2 units) */
     uint32_t symbols;
     int32_t last_error;    /* Gardner error of the last symbol (diagnostic) */

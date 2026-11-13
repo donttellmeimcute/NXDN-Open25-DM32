@@ -98,9 +98,10 @@ size_t nxdn_mod_flush(nxdn_mod *m, int16_t out[16])
 /* --- Receive --- */
 #define SPS_Q16 ((int64_t)NXDN_FS * 65536 / NXDN_RS)   /* 10/3 samples */
 /* Acquisition: the first symbols after nxdn_demod_init / nxdn_demod_reacquire (a
- * transmission's preamble alternates +3 / -3) set the offset from the mean of
- * symbol pairs and the timing with a fast loop; after them the loops slow down,
- * since on data Gardner's self-noise jitters a fast loop (docs/nxdn-modem.md). */
+ * transmission's preamble, +3 +3 -3 -3 repeated, or +3 / -3 alternating) set the
+ * offset from the mean of the last four symbols and the timing with a fast
+ * loop; after them the loops slow down, since on data Gardner's self-noise
+ * jitters a fast loop (docs/nxdn-modem.md). */
 enum { AMP_MIN = 64, ACQ_SYMBOLS = 32, TIMING_ACQ_SHIFT = 4, TIMING_TRACK_SHIFT = 8 };
 
 void nxdn_demod_init(nxdn_demod *d)
@@ -151,28 +152,40 @@ size_t nxdn_demod_samples(nxdn_demod *d, const int16_t *in, size_t n, uint8_t *d
         while (w < cap && (d->t_on >> 16) + NXDN_RX_HALF <= (int64_t)d->count - 1) {
             int32_t on = mf(d, d->t_on);
             int32_t mid = mf(d, d->t_on - SPS_Q16 / 2);
-            /* Levels, decision directed: after the symbol is sliced, the offset moves by the
-             * difference from that symbol's ideal level and the outer level (+-3 units) by the
-             * outer symbols' magnitude; the threshold sits at 2/3 of it. Fast while acquiring,
-             * then slow. The first symbols seed the outer level from their magnitude. */
+            /* Levels. The fourth symbol seeds the offset and the outer level (+-3 units) from the
+             * first four (a preamble's: outer symbols, zero mean). While acquiring, the offset
+             * follows the mean of the last four symbols, which a wrong early decision can't run
+             * away with; then it is decision directed: it moves by the symbol's distance from
+             * its ideal level. The outer level follows the outer symbols' magnitude and the
+             * threshold sits at 2/3 of it (while acquiring every symbol counts: a preamble
+             * is all outer symbols). Fast while acquiring, then slow. */
+            static const int8_t lv[4] = { 1, 3, -1, -3 };
             unsigned shift = d->symbols < ACQ_SYMBOLS ? 3 : d->symbols < 400 ? 5 : 6;
-            int32_t dev = on - d->dc, mag = dev < 0 ? -dev : dev;
-            if (d->symbols < 4) {
-                d->dc += (on - d->dc) >> 1;
-                d->outer += (mag - d->outer) >> 1;
+            d->last4[d->symbols & 3u] = on;
+            int32_t mean4 = (d->last4[0] + d->last4[1] + d->last4[2] + d->last4[3]) / 4;
+            if (d->symbols == 3) {
+                d->dc = mean4;
+                int32_t m = 0;
+                for (unsigned k = 0; k < 4; k++) m += d->last4[k] > mean4 ? d->last4[k] - mean4 : mean4 - d->last4[k];
+                d->outer = m / 4;
             }
+            int32_t dev = on - d->dc, mag = dev < 0 ? -dev : dev;
             d->amp = d->outer * 2 / 3;
             uint8_t s = slice(d, on);
             dibits[w++] = s;
-            static const int8_t lv[4] = { 1, 3, -1, -3 };
-            /* While acquiring, the offset is the mean of the last two symbols (exact on the
-             * alternating preamble), which a wrong early decision can't run away with */
-            if (d->symbols < ACQ_SYMBOLS) d->dc += ((on + d->prev_on) / 2 - d->dc) >> shift;
-            else d->dc += (on - (d->dc + lv[s] * d->outer / 3)) >> shift;
-            if (s == 1 || s == 3) d->outer += (mag - d->outer) >> shift;
-            /* Gardner: (y_k - y_k-1) * y_k-1/2, normalized by the level squared */
+            if (d->symbols >= 4) {
+                if (d->symbols < ACQ_SYMBOLS) d->dc += (mean4 - d->dc) >> shift;
+                else d->dc += (on - (d->dc + lv[s] * d->outer / 3)) >> shift;
+                /* a preamble is all outer symbols: while acquiring every symbol counts */
+                if (d->symbols < ACQ_SYMBOLS || s == 1 || s == 3) d->outer += (mag - d->outer) >> shift;
+            }
+            /* Gardner, (y_k - y_k-1) * y_k-1/2 normalized by the level squared, on the symbol
+             * pairs that cross the offset only. Between two symbols of the same sign the
+             * mid-sample sits near a peak and its term cancels the crossings' on average: a
+             * +3 +3 -3 -3 preamble (MMDVM's) then gives no timing at all, and random data gives
+             * more self-noise. */
             int32_t a = d->amp > AMP_MIN ? d->amp : AMP_MIN;
-            int64_t e = (int64_t)(on - d->prev_on) * (mid - d->dc);
+            int64_t e = (on > d->dc) != (d->prev_on > d->dc) ? (int64_t)(on - d->prev_on) * (mid - d->dc) : 0;
             int64_t norm = e * 65536 / ((int64_t)a * a);
             if (norm > (4 << 16)) norm = 4 << 16;
             if (norm < -(4 << 16)) norm = -(4 << 16);

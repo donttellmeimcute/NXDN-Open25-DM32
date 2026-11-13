@@ -26,7 +26,7 @@ enum { SQUELCH_MS = 5 };
 #ifndef TXG
 #define TXG 512   /* modulator output: 2 LSB per Hz, headroom for high-pass pre-compensation */
 #endif
-enum { MAX_FRAMES = 64, MAX_DIB = 16000, MAX_SAMP = 60000, PREAMBLE = 48, TX_GAIN_Q8 = TXG };
+enum { MAX_FRAMES = 64, MAX_DIB = 16000, MAX_SAMP = 60000, PREAMBLE = NXDN_PREAMBLE_SYMBOLS, TX_GAIN_Q8 = TXG };
 enum { ROUTE_SOFT8K, ROUTE_PHY4800 };
 
 static uint32_t rnd;
@@ -57,14 +57,14 @@ typedef struct {
     double ber, fer;
 } sim_result;
 
-/* A call of `frames` voice frames: dibits, preamble first (alternating +3 / -3) */
+/* A call of `frames` voice frames: dibits, the preamble first (nxdn_preamble_dibit) */
 static unsigned build_call(unsigned frames, unsigned *frame_start)
 {
     nxdn_tx tx;
     nxdn_tx_cfg cfg = { 12, 4001, 200, false, false, NXDN_DIR_INBOUND };
     nxdn_tx_begin(&tx, &cfg, 1);
     unsigned n = 0;
-    for (unsigned i = 0; i < PREAMBLE; i++) txdib[n++] = i & 1 ? 3 : 1;
+    for (unsigned i = 0; i < PREAMBLE; i++) txdib[n++] = nxdn_preamble_dibit(i, PREAMBLE);
     *frame_start = n;
     n_params = 0;
     uint8_t f[NXDN_FRAME_BYTES];
@@ -184,6 +184,42 @@ static nxdn_channel_cfg cfg(double cnr, double off, double dev, double rx_hpf, d
     return c;
 }
 
+/* Joining a call: the voice slots lost at its start. kind 0: our preamble; 1: MMDVM's (0x5F bytes, then
+ * 0x5775FD); 2: the squelch opens 2.5 frames into the voice (late entry: the call is admitted once a whole
+ * SACCH superframe is heard; the slots before the squelch are not counted). The demodulator idles on 100 ms
+ * of noise first, as everywhere here. */
+static unsigned join_loss(int kind, double cnr, unsigned seed)
+{
+    unsigned start;
+    rnd = seed;
+    unsigned ndib = build_call(20, &start);
+    if (kind == 1) {
+        static const uint8_t pre[3] = { 0x57, 0x75, 0xFD };
+        for (unsigned i = 0; i < 36; i++) txdib[i] = (uint8_t)((0x5F >> (6 - 2 * (i % 4))) & 3);
+        for (unsigned i = 0; i < 12; i++) txdib[36 + i] = (uint8_t)((pre[i / 4] >> (6 - 2 * (i % 4))) & 3);
+    }
+    nxdn_mod m;
+    nxdn_mod_init(&m, TX_GAIN_Q8);
+    size_t n8 = 0;
+    for (unsigned i = 0; i < ndib; i++) n8 += nxdn_mod_dibit(&m, txdib[i], tx8 + n8);
+    n8 += nxdn_mod_flush(&m, tx8 + n8);
+    nxdn_channel_cfg c = cfg(cnr, 200, 1.0, 0, 0, seed);
+    n8 = nxdn_channel_run(&c, tx8, n8, TX_GAIN_Q8 / 256.0, rx8);
+    nxdn_demod d;
+    nxdn_demod_init(&d);
+    size_t lead8 = (size_t)(c.lead_s * 8000);
+    size_t open = lead8 + (kind == 2 ? (size_t)((PREAMBLE + NXDN_FRAME_SYMBOLS * 2.5) * 10 / 3) : SQUELCH_MS * 8);
+    size_t nd = nxdn_demod_samples(&d, rx8, open, rxdib, MAX_DIB);
+    nxdn_demod_reacquire(&d);
+    nd += nxdn_demod_samples(&d, rx8 + open, n8 - open, rxdib + nd, MAX_DIB - nd);
+    nxdn_rx rx;
+    n_heard = slot_ok = 0;
+    nxdn_rx_init(&rx, 12, 200, 0, sink, NULL);
+    for (size_t i = 0; i < nd; i++) nxdn_rx_push_dibit(&rx, rxdib[i]);
+    unsigned expect = kind == 2 ? 80 - 8 : 80;
+    return expect > slot_ok ? expect - slot_ok : 0;
+}
+
 static void sweep(void)
 {
     static const double cnr[] = { 6, 8, 10, 12, 14, 16, 20, 30 };
@@ -238,6 +274,26 @@ static void sweep(void)
             printf("\n");
         }
     }
+    /* Joining calls */
+    static const double jcnr[] = { 8, 10, 14, 20 };
+    static const char *const jname[] = { "our preamble (+3 / -3 dotting, 0x5775FD)", "MMDVM's preamble (0x5F bytes, 0x5775FD)",
+                                         "squelch opens 2.5 frames into the call" };
+    enum { SEEDS = 40 };
+    printf("\n### Joining a call (software route; voice frames lost at the start, mean of %u calls)\n\n| Start |", SEEDS);
+    for (unsigned i = 0; i < sizeof jcnr / sizeof *jcnr; i++) printf(" %g dB |", jcnr[i]);
+    printf("\n|---|");
+    for (unsigned i = 0; i < sizeof jcnr / sizeof *jcnr; i++) printf("---:|");
+    printf("\n");
+    for (int kind = 0; kind < 3; kind++) {
+        printf("| %s |", jname[kind]);
+        for (unsigned i = 0; i < sizeof jcnr / sizeof *jcnr; i++) {
+            unsigned lost = 0;
+            for (unsigned s = 0; s < SEEDS; s++) lost += join_loss(kind, jcnr[i], 100 + s);
+            printf(" %.2f |", lost / 4.0 / SEEDS);
+        }
+        printf("\n");
+    }
+
     /* Transmit spectrum of both routes */
     printf("\n### Transmit spectrum (no noise, 60 voice frames)\n\n| TX route | 99%% occupied bandwidth | power outside +-3.125 kHz "
            "| each adjacent 6.25 kHz channel |\n|---|---:|---:|---:|\n");

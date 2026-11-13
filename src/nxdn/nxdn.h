@@ -33,7 +33,7 @@ enum {
     NXDN_LAYER3_BYTES = 10,                            /* FACCH1 data (80 bits) */
     NXDN_AMBE_BITS = 49
 };
-#define NXDN_FSW 0xCDF59u            /* 20 bits: +3 +1 -3 +3 -3 -3 +3 +3 -1 +3 */
+#define NXDN_FSW 0xCDF59u            /* 20 bits: -3 +1 -3 +3 -3 -3 +3 +3 -1 +3 */
 
 /* LICH: RF channel type, functional channel type, option, direction (TS 1-A) */
 enum { NXDN_RFCT_RCCH = 0, NXDN_RFCT_RTCH = 1, NXDN_RFCT_RDCH = 2, NXDN_RFCT_RTCH_C = 3 };
@@ -113,6 +113,15 @@ static inline void nxdn_set_bit(uint8_t *b, unsigned i, unsigned v)
     b[i >> 3] = (uint8_t)(v ? b[i >> 3] | m : b[i >> 3] & ~m);
 }
 void nxdn_put_fsw(uint8_t frame[NXDN_FRAME_BYTES]);
+
+/* What a transmission sends before its first frame, symbol i of n (n >= 12):
+ * +3 / -3 dotting, then the 24-bit preamble 0x5775FD that MMDVM's NXDN
+ * transmitter sends before the first frame (NXDNTX.cpp NXDN_PREAMBLE). MMDVM
+ * sends 0x5F bytes (+3 +3 -3 -3) ahead of it; that tone at a quarter of the
+ * symbol rate carries no timing for a Gardner detector, half the symbol rate
+ * does (docs/nxdn-modem.md). */
+#define NXDN_PREAMBLE_SYMBOLS 48u
+uint8_t nxdn_preamble_dibit(unsigned i, unsigned n);
 
 #ifdef __cplusplus
 }
