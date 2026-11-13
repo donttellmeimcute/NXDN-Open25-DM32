@@ -1,0 +1,63 @@
+{
+  "date": "2026-11-13",
+  "phase": 2,
+  "measurement": "linker region totals of tools/build_radiofoundry.py builds (main RAM region 211456 bytes); each preset built with CONFIG_NXDN=y and with --no-nxdn from the same tree; zero warnings in every build",
+  "presets": {
+    "native": {
+      "flash_bytes": 459112,
+      "main_ram_bytes": 193120,
+      "main_ram_free_bytes": 18336,
+      "nxdn_off_flash_bytes": 445308,
+      "nxdn_off_main_ram_bytes": 190384,
+      "nxdn_flash_bytes": 13804,
+      "nxdn_ram_bytes": 2736
+    },
+    "lab (--disable-native)": {
+      "flash_bytes": 447184,
+      "main_ram_bytes": 187176,
+      "main_ram_free_bytes": 24280,
+      "nxdn_off_flash_bytes": 432252,
+      "nxdn_off_main_ram_bytes": 184408,
+      "nxdn_flash_bytes": 14932,
+      "nxdn_ram_bytes": 2768
+    },
+    "P25 off (--disable)": {
+      "flash_bytes": 408652,
+      "main_ram_bytes": 163312,
+      "main_ram_free_bytes": 48144,
+      "nxdn_off_flash_bytes": 393720,
+      "nxdn_off_main_ram_bytes": 160544,
+      "nxdn_flash_bytes": 14932,
+      "nxdn_ram_bytes": 2768
+    },
+    "native lean": {
+      "flash_bytes": 457352,
+      "main_ram_bytes": 190704,
+      "main_ram_free_bytes": 20752,
+      "nxdn_off_flash_bytes": 443548,
+      "nxdn_off_main_ram_bytes": 187968,
+      "nxdn_flash_bytes": 13804,
+      "nxdn_ram_bytes": 2736
+    },
+    "TX bench (--first-boot --dev-update --tx-bench --lean)": {
+      "flash_bytes": 453300,
+      "main_ram_bytes": 198768,
+      "main_ram_free_bytes": 12688,
+      "nxdn_off_flash_bytes": 439496,
+      "nxdn_off_main_ram_bytes": 196032,
+      "nxdn_flash_bytes": 13804,
+      "nxdn_ram_bytes": 2736
+    }
+  },
+  "stack": "native preset --stack-check: every task fits; radio task deepest 2128 of 3072 bytes (the crash path, unchanged); the NXDN path in the radio tick adds about 0.8 KB under radio_sm_tick and stays below it; least margin the idle task, 136 bytes, unchanged",
+  "tests": {
+    "nxdn_host": "tools/test_nxdn.py: calls, modem, link, radio channel (with RadioFoundry ambeVoice), MMDVMHost oracle, FEC comparison",
+    "radiofoundry_host": "make -C tests/host run: all pass, incl. radioCoreTestNXDN 2172 checks, radioCoreTestP25 2204 checks, uiFlowTest, layout check 4667 screens",
+    "site": "site/tests/run.sh: 556 pass, 0 fail",
+    "python": "python3 -m unittest discover -s tests: 108 tests, 1 skipped",
+    "validation": "results/nxdn-validation.json"
+  },
+  "modem_simulation": "docs/nxdn-modem.md (build/nxdn-host/test_nxdn_modem --sweep)",
+  "not_measured": "CPU load of the NXDN modem on the CK803S (Phase 4); everything on the radio (docs/nxdn-channels.md)",
+  "note": "Phase 1's TX bench flash figure (472,472) does not reproduce: today's rebuild of that preset with NXDN off links 439,496 bytes with the same RAM (196,032)"
+}

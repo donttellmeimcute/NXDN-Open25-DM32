@@ -230,16 +230,24 @@ for both filters, which is small next to the AMBE+2 vocoder.
 Measured on the hardware before NXDN is called working (`docs/hil-checklist.md`):
 
 1. **Transmit scale.** The prompt FIFO's LSB per Hz of deviation in NXDN's FM settings. APRS measured about
-   2750 LSB for 3 kHz peak at 25 kHz (`radio_dm32.c`); the NXDN worker starts from that and the value is calibrated
-   with a service monitor on the 1200 Hz preamble (+-1050 Hz peak).
+   2750 LSB for 3 kHz peak at 25 kHz (`radio_dm32.c`); the board's tap starts from that (`fm_tx_nominal_peak`
+   1375 for 1.5 kHz, `dm32_nxdn.inc`) and the value is calibrated with a service monitor on the 1200 Hz dotting
+   of the preamble (+-1050 Hz peak).
 2. **Transmit low-frequency response.** Whether the prompt FIFO path has a high-pass or pre-emphasis with the voice
    processing off: send the +3 / -3 preamble and a long run of +3 symbols, measure the deviation's droop. The
-   worker then compensates the measured corner, or nothing.
+   measured corner goes into the tap's `flat_tx_hpf_hz` (the link pre-compensates it), or nothing.
 3. **Receive frequency response** of the RX RAM copy with the band-pass off and FD6818 0x2B = 0xE000: 50 Hz,
    300 Hz, 1 kHz and 2 kHz tones at the same deviation from a signal generator, their levels in the RX RAM samples.
-   Flat: no compensation. A first-order roll-off above about 200 Hz: the de-emphasis is still on (750 us
-   compensation). A droop at 50 Hz: a high-pass, compensate its corner. Then the receive gain against clipping.
-4. **The prompt FIFO reaches the modulator on this board.** The RadioFoundry spec says ring play reaches the
-   modulator on some boards and needs the codec mixer route on others; the mixer route passes the transmit limiter.
-5. **Decoding by another receiver**: a commercial NXDN radio or dsd-fme from an SDR on the radio's transmission,
-   and the radio receiving a commercial NXDN radio or an MMDVM modem.
+   Flat: no compensation. A first-order roll-off above about 200 Hz: the de-emphasis is still on (`flat_rx_deemph_us`
+   750). A droop at 50 Hz: a high-pass, its corner into `flat_rx_hpf_hz`. Then the receive gain against clipping
+   (receiver noise reaches full scale with the reset AF gain, RadioFoundry `modem-hrc7000.md` 8.5).
+4. **The prompt FIFO reaches the modulator on this board** with the FM voice source switched to TX RAM
+   (AUDIO_CONTROL b0). RadioFoundry measured ring play reaching the modulator for APRS on some boards, the codec mixer
+   route on others; the mixer route passes the transmit limiter. With b0 set: no microphone audio on air (speak into
+   the radio during an NXDN transmission and listen on a receiver in FM), and the microphone still reaching the
+   vocoder (ambeVoice's `tx_mic_peak` and level statistics on the debug link).
+5. **Speaker playback of decoded voice in FM mode**: the PCM stream and the speaker route while the receiver is in FM
+   with the FD6818's audio on the HR_C7000's input.
+6. **Decoding by another receiver**: a commercial NXDN radio or dsd-fme from an SDR on the radio's transmission,
+   and the radio receiving a commercial NXDN radio or an MMDVM modem, joining at the header after the receiver's
+   noise.
