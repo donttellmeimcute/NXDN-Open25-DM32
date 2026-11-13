@@ -13,6 +13,9 @@ python3 tools/build_radiofoundry.py --disable
 python3 tools/c4fm_reference.py generate artifacts/c4fm/calibration.csv
 ```
 
+The ASan/UBSan host tests use clang with its compiler-rt runtime. On Ubuntu
+24.04 install `libclang-rt-18-dev`; without it the sanitizer builds fail to link.
+
 The build uses the pinned upstream commit and FreeRTOS submodule, our C-SKY
 compiler, genuine pinned newlib, and codec objects rebuilt with
 `-mno-high-registers`. `--with-local-stock` is optional and requires a recognized
