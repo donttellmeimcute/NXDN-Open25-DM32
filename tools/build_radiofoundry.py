@@ -120,11 +120,11 @@ def prepare(write=True, apply_series=True, limit=None):
     if git(DEST, "rev-parse", "HEAD") != PIN:
         raise SystemExit("Refusing incompatible derivative HEAD")
     run(["git", "-C", DEST, "submodule", "update", "--init", "third_party/FreeRTOS-Kernel"])
-    transform("config/features.mk", [("# Dependencies\n", "CONFIG_P25 ?= n\nCONFIG_P25_NATIVE ?= n\nCONFIG_NXDN ?= n\nCONFIG_FIRSTBOOT ?= n\nCONFIG_P25_BENCH ?= y\nCONFIG_CPU_PROFILE ?= n\nCONFIG_DEV_UPDATE ?= n\nCONFIG_DEV_TX ?= n\nFEATURES += P25 P25_NATIVE NXDN FIRSTBOOT P25_BENCH CPU_PROFILE DEV_UPDATE DEV_TX\nifeq ($(CONFIG_NXDN),y)\nifneq ($(CONFIG_DMR),y)\n$(error NXDN needs DMR=y (the AMBE+2 vocoder and voice bridge))\nendif\nendif\nifeq ($(CONFIG_DEV_TX),y)\nifneq ($(CONFIG_FIRSTBOOT)$(CONFIG_DEV_UPDATE)$(CONFIG_P25_NATIVE),yyy)\n$(error DEV_TX requires FIRSTBOOT=y DEV_UPDATE=y P25_NATIVE=y)\nendif\nendif\nifeq ($(CONFIG_DEV_UPDATE),y)\nifneq ($(CONFIG_FIRSTBOOT)$(CONFIG_STUB_ENTRY),yy)\n$(error DEV_UPDATE requires FIRSTBOOT=y STUB_ENTRY=y)\nendif\nendif\nifeq ($(CONFIG_FIRSTBOOT),y)\nifneq ($(CONFIG_CPS_OPENFW)$(CONFIG_CPS_FAST),nn)\n$(error FIRSTBOOT requires CPS_OPENFW=n CPS_FAST=n)\nendif\nifneq ($(CONFIG_STUB_ENTRY),$(CONFIG_DEV_UPDATE))\n$(error FIRSTBOOT requires STUB_ENTRY to match DEV_UPDATE)\nendif\nendif\nifeq ($(CONFIG_P25_NATIVE),y)\nifneq ($(CONFIG_P25)$(CONFIG_DMR),yy)\n$(error P25_NATIVE needs P25=y and DMR=y)\nendif\nendif\n\n# Dependencies\n")])
-    transform("core/config.h", [("#define RFOUNDRY_CONFIG_H\n", "#define RFOUNDRY_CONFIG_H\n#ifndef CONFIG_P25\n#define CONFIG_P25 0\n#endif\n#ifndef CONFIG_P25_NATIVE\n#define CONFIG_P25_NATIVE 0\n#endif\n#ifndef CONFIG_NXDN\n#define CONFIG_NXDN 0\n#endif\n#ifndef CONFIG_P25_BENCH\n#define CONFIG_P25_BENCH 1\n#endif\n#ifndef CONFIG_DEV_UPDATE\n#define CONFIG_DEV_UPDATE 0\n#endif\n#ifndef CONFIG_DEV_TX\n#define CONFIG_DEV_TX 0\n#endif\n#ifndef CONFIG_CPU_PROFILE\n#define CONFIG_CPU_PROFILE 0\n#endif\n#ifndef CONFIG_FIRSTBOOT\n#define CONFIG_FIRSTBOOT 0\n#endif\n#if CONFIG_FIRSTBOOT\n#include \"firstboot/firstboot.h\"\n#endif\n")])
+    transform("config/features.mk", [("# Dependencies\n", "CONFIG_P25 ?= n\nCONFIG_P25_NATIVE ?= n\nCONFIG_NXDN ?= n\nCONFIG_P25_TRUNK ?= n\nCONFIG_P25_TRUNK_TX ?= n\nCONFIG_P25_PHASE2 ?= n\nCONFIG_FIRSTBOOT ?= n\nCONFIG_P25_BENCH ?= y\nCONFIG_CPU_PROFILE ?= n\nCONFIG_DEV_UPDATE ?= n\nCONFIG_DEV_TX ?= n\nFEATURES += P25 P25_NATIVE NXDN P25_TRUNK P25_TRUNK_TX P25_PHASE2 FIRSTBOOT P25_BENCH CPU_PROFILE DEV_UPDATE DEV_TX\nifeq ($(CONFIG_P25_TRUNK),y)\nifneq ($(CONFIG_P25_NATIVE),y)\n$(error P25_TRUNK needs P25_NATIVE=y (the control channel and voice ride the P25 path))\nendif\nendif\nifeq ($(CONFIG_P25_TRUNK_TX),y)\nifneq ($(CONFIG_P25_TRUNK),y)\n$(error P25_TRUNK_TX needs P25_TRUNK=y)\nendif\nendif\nifeq ($(CONFIG_P25_PHASE2),y)\nifneq ($(CONFIG_P25_TRUNK),y)\n$(error P25_PHASE2 needs P25_TRUNK=y)\nendif\nendif\nifeq ($(CONFIG_NXDN),y)\nifneq ($(CONFIG_DMR),y)\n$(error NXDN needs DMR=y (the AMBE+2 vocoder and voice bridge))\nendif\nendif\nifeq ($(CONFIG_DEV_TX),y)\nifneq ($(CONFIG_FIRSTBOOT)$(CONFIG_DEV_UPDATE)$(CONFIG_P25_NATIVE),yyy)\n$(error DEV_TX requires FIRSTBOOT=y DEV_UPDATE=y P25_NATIVE=y)\nendif\nendif\nifeq ($(CONFIG_DEV_UPDATE),y)\nifneq ($(CONFIG_FIRSTBOOT)$(CONFIG_STUB_ENTRY),yy)\n$(error DEV_UPDATE requires FIRSTBOOT=y STUB_ENTRY=y)\nendif\nendif\nifeq ($(CONFIG_FIRSTBOOT),y)\nifneq ($(CONFIG_CPS_OPENFW)$(CONFIG_CPS_FAST),nn)\n$(error FIRSTBOOT requires CPS_OPENFW=n CPS_FAST=n)\nendif\nifneq ($(CONFIG_STUB_ENTRY),$(CONFIG_DEV_UPDATE))\n$(error FIRSTBOOT requires STUB_ENTRY to match DEV_UPDATE)\nendif\nendif\nifeq ($(CONFIG_P25_NATIVE),y)\nifneq ($(CONFIG_P25)$(CONFIG_DMR),yy)\n$(error P25_NATIVE needs P25=y and DMR=y)\nendif\nendif\n\n# Dependencies\n")])
+    transform("core/config.h", [("#define RFOUNDRY_CONFIG_H\n", "#define RFOUNDRY_CONFIG_H\n#ifndef CONFIG_P25\n#define CONFIG_P25 0\n#endif\n#ifndef CONFIG_P25_NATIVE\n#define CONFIG_P25_NATIVE 0\n#endif\n#ifndef CONFIG_NXDN\n#define CONFIG_NXDN 0\n#endif\n#ifndef CONFIG_P25_TRUNK\n#define CONFIG_P25_TRUNK 0\n#endif\n#ifndef CONFIG_P25_TRUNK_TX\n#define CONFIG_P25_TRUNK_TX 0\n#endif\n#ifndef CONFIG_P25_PHASE2\n#define CONFIG_P25_PHASE2 0\n#endif\n#ifndef CONFIG_P25_BENCH\n#define CONFIG_P25_BENCH 1\n#endif\n#ifndef CONFIG_DEV_UPDATE\n#define CONFIG_DEV_UPDATE 0\n#endif\n#ifndef CONFIG_DEV_TX\n#define CONFIG_DEV_TX 0\n#endif\n#ifndef CONFIG_CPU_PROFILE\n#define CONFIG_CPU_PROFILE 0\n#endif\n#ifndef CONFIG_FIRSTBOOT\n#define CONFIG_FIRSTBOOT 0\n#endif\n#if CONFIG_FIRSTBOOT\n#include \"firstboot/firstboot.h\"\n#endif\n")])
     transform("Makefile", [
-        ("APP_DIRS := $(CORE_DIRS)", "ifeq ($(CONFIG_P25),y)\nCORE_DIRS += core/p25\nP25_LIB := core/p25/libdm32_imbe.a\nendif\nifeq ($(CONFIG_P25_NATIVE),y)\nCORE_DIRS += core/native_modem\nendif\nifneq ($(filter y,$(CONFIG_P25_NATIVE) $(CONFIG_NXDN)),)\nCORE_DIRS += core/dv\nendif\nifeq ($(CONFIG_NXDN),y)\nCORE_DIRS += core/nxdn\nendif\nifeq ($(CONFIG_FIRSTBOOT),y)\nCORE_DIRS += core/firstboot\nendif\nAPP_DIRS := $(CORE_DIRS)"),
-        ("INCLUDES := -Ihal", "INCLUDES := -Icore/p25 -Icore/native_modem -Icore/dv -Icore/nxdn -Ihal"),
+        ("APP_DIRS := $(CORE_DIRS)", "ifeq ($(CONFIG_P25),y)\nCORE_DIRS += core/p25\nP25_LIB := core/p25/libdm32_imbe.a\nendif\nifeq ($(CONFIG_P25_NATIVE),y)\nCORE_DIRS += core/native_modem\nendif\nifneq ($(filter y,$(CONFIG_P25_NATIVE) $(CONFIG_NXDN)),)\nCORE_DIRS += core/dv\nendif\nifeq ($(CONFIG_NXDN),y)\nCORE_DIRS += core/nxdn\nendif\nifeq ($(CONFIG_P25_TRUNK),y)\nCORE_DIRS += core/p25t\nendif\nifeq ($(CONFIG_P25_PHASE2),y)\nCORE_DIRS += core/p25p2\nendif\nifeq ($(CONFIG_FIRSTBOOT),y)\nCORE_DIRS += core/firstboot\nendif\nAPP_DIRS := $(CORE_DIRS)"),
+        ("INCLUDES := -Ihal", "INCLUDES := -Icore/p25 -Icore/native_modem -Icore/dv -Icore/nxdn -Icore/p25t -Icore/p25p2 -Ihal"),
         ("$(TARGET).elf: $(OBJ) $(LDSCRIPT)", "$(TARGET).elf: $(OBJ) $(P25_LIB) $(LDSCRIPT)"),
         ("-o $@ $(OBJ) -lm", "-o $@ $(OBJ) $(P25_LIB) -lm"),
     ])
@@ -240,6 +240,12 @@ def prepare(write=True, apply_series=True, limit=None):
     for p in sorted((ROOT / "integration/radiofoundry/nxdn").glob("*")):
         folder = "boards/dm32" if p.suffix == ".inc" else "core/dv"
         write_owned(DEST / folder / p.name, p.read_bytes())
+    for sub in ("p25t", "p25p2"):
+        for p in sorted((ROOT / "src" / sub).glob("*")):
+            if p.suffix in (".c", ".h", ".inc"):
+                write_owned(DEST / "core" / sub / p.name, p.read_bytes())
+    for p in sorted((ROOT / "integration/radiofoundry/p25t").glob("*")):
+        write_owned(DEST / "core/dv" / p.name, p.read_bytes())
     for p in sorted((ROOT / "src/modem").glob("*")):
         if p.suffix in (".c", ".h"): write_owned(DEST / "core/native_modem" / p.name,p.read_bytes())
     for p in sorted((ROOT / "integration/radiofoundry/native").glob("*")):
@@ -287,7 +293,13 @@ def main():
     ap.add_argument("--reuse-codec", action="store_true", help="reuse codec only when inputs/compiler/archive/call graphs match checked hashes")
     ap.add_argument("--tx-bench",action="store_true",help="bounded native TX on 145.500 MHz; retains ordinary PTT/storage guards")
     ap.add_argument("--no-nxdn", action="store_true", help="build with CONFIG_NXDN=n")
+    ap.add_argument("--no-trunk", action="store_true", help="build with CONFIG_P25_TRUNK=n (and no Phase 2)")
+    ap.add_argument("--trunk-tx", action="store_true",
+                    help="CONFIG_P25_TRUNK_TX=y: trunked registration, affiliation and calls (off by default; "
+                         "docs/p25-trunking.md: only on a system you are authorized on)")
+    ap.add_argument("--no-phase2", action="store_true", help="build with CONFIG_P25_PHASE2=n")
     args = ap.parse_args()
+    if args.trunk_tx and args.no_trunk: ap.error("--trunk-tx needs trunking")
     if args.tx_bench and not (args.first_boot and args.dev_update):ap.error("tx-bench requires first-boot and dev-update")
     if args.dev_update and not args.first_boot:ap.error("dev-update needs first-boot restrictions")
     if args.disable and (args.lean or args.cpu_profile):
@@ -314,11 +326,16 @@ def main():
     native=not args.disable and not args.disable_native
     suffix = "firstboot" if args.first_boot else "off" if args.disable else "native" if native else "lab"
     identity=suffix
-    suffix += ("-lean" if args.lean else "") + ("-cpu" if args.cpu_profile else "") + ("-dev" if args.dev_update else "") + ("-tx" if args.tx_bench else "") + ("-nonxdn" if args.no_nxdn else "")
+    suffix += ("-lean" if args.lean else "") + ("-cpu" if args.cpu_profile else "") + ("-dev" if args.dev_update else "") + ("-tx" if args.tx_bench else "") + ("-nonxdn" if args.no_nxdn else "") + \
+        ("-notrunk" if native and args.no_trunk else "-trunktx" if native and args.trunk_tx else "") + \
+        ("-nop2" if native and args.no_phase2 and not args.no_trunk else "")
     b = f"build/dm32-p25-{suffix}"
     command = ["make", "-j8", "BOARD=dm32", f"CROSS={ROOT}/toolchain/bin/csky-elf-", f"BUILD={b}",
         "CONFIG_P25=" + ("n" if args.disable else "y"), "CONFIG_P25_NATIVE="+("y" if native else "n"), "CONFIG_DMR_IP_GATEWAY=n", "CONFIG_NET_PPP=n",
         "CONFIG_NXDN=" + ("n" if args.no_nxdn else "y"),
+        "CONFIG_P25_TRUNK=" + ("y" if native and not args.no_trunk else "n"),
+        "CONFIG_P25_TRUNK_TX=" + ("y" if native and args.trunk_tx and not args.no_trunk else "n"),
+        "CONFIG_P25_PHASE2=" + ("y" if native and not args.no_trunk and not args.no_phase2 else "n"),
         "CONFIG_APRS=n", "CONFIG_SFR=n", "CONFIG_HOTSPOT=n", "CONFIG_ZONE_SHARE=n",
         f"RFOUNDRY_VERSION=dfbaf20c-p25-{identity}", f"RFOUNDRY_GIT_TIME={git(UP, 'show', '-s', '--format=%ct', 'HEAD')}",
         "RFOUNDRY_GIT_DIRTY=1",
@@ -370,6 +387,10 @@ def main():
                 "start_audio":("playback_pace",),
                 "p25_lab_command":("playback_stats",)}.items():
                 extra+="call "+caller+" "+" ".join(targets)+"\n"
+            if not args.no_trunk:
+                # P25 trunking: the control channel decoder rides the P25 worker's receive stream
+                extra+="call p25_phy_rx_record core/dv/radio_p25t.c:tap\n"
+                extra+="call p25t_rx_dibit core/dv/radio_p25t.c:on_tsbk core/dv/radio_p25t.c:on_status\n"
         if extra:
             edges=DEST / b / "native-stack-edges.txt"
             edges.write_text((UP / "tools/stack_check_edges.txt").read_text()+extra)

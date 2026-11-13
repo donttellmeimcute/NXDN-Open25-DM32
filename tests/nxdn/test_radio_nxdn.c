@@ -210,7 +210,8 @@ static void collect(void *ctx, const uint8_t slot[9])
 
 static radio_dv_cfg_t channel(void)
 {
-    radio_dv_cfg_t c = { RADIO_MODE_NXDN, 451125000, 451625000, 1, 12, 12, 200, 4001, false };
+    radio_dv_cfg_t c = { .mode = RADIO_MODE_NXDN, .rx_hz = 451125000, .tx_hz = 451625000, .power = 1, .nac_rx = 12,
+                         .nac_tx = 12, .talkgroup = 200, .unit_id = 4001 };
     return c;
 }
 

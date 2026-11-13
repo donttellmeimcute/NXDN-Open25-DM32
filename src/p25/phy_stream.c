@@ -37,15 +37,23 @@ int p25_phy_rx_record(p25_phy_rx *phy, p25_voice *v, uint32_t sequence,
     int gap = phy->sequenced && sequence != phy->next_sequence;
     phy->next_sequence = sequence + 1u;
     phy->sequenced = 1;
-    if (gap) { phy->gaps++; p25_voice_rx_reset(v); }
+    if (gap) {
+        phy->gaps++;
+        p25_voice_rx_reset(v);
+        if (phy->tap) phy->tap(phy->tap_ctx, P25_PHY_TAP_GAP);
+    }
     if (p25_phy_rx_air(ram, kind, air)) {
         phy->unsupported++;
         p25_voice_rx_reset(v);
+        if (phy->tap) phy->tap(phy->tap_ctx, P25_PHY_TAP_GAP);
         return -1;
     }
     phy->records++;
-    for (unsigned i = 0; i < 144; i++)
-        p25_voice_rx_dibit(v, (uint8_t)((air[i / 4] >> (6 - (i % 4) * 2)) & 3));
+    for (unsigned i = 0; i < 144; i++) {
+        uint8_t d = (uint8_t)((air[i / 4] >> (6 - (i % 4) * 2)) & 3);
+        if (phy->tap) phy->tap(phy->tap_ctx, d);
+        p25_voice_rx_dibit(v, d);
+    }
     return gap ? -1 : 0;
 }
 
@@ -56,5 +64,13 @@ size_t p25_phy_tx_block(p25_voice *v, uint8_t ram[36])
     memset(ram, 0, 36);
     if (v->fault) return 0;
     for (size_t i = 0; i < n; i++) ram[i / 4] |= (uint8_t)(dibits[i] << (6 - (i % 4) * 2));
+    return n;
+}
+
+size_t p25_phy_tx_pack(const uint8_t *dibits, size_t n, uint8_t ram[36])
+{
+    if (n > P25_PHY_SYMBOLS) n = P25_PHY_SYMBOLS;
+    memset(ram, 0, 36);
+    for (size_t i = 0; i < n; i++) ram[i / 4] |= (uint8_t)((dibits[i] & 3u) << (6 - (i % 4) * 2));
     return n;
 }

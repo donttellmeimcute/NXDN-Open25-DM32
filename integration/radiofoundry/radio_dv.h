@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* The radio core's side of a digital voice channel: P25 on the modem's native
  * physical layer (radio_dv.c, p25_lab.c), NXDN48 on the board's flat FM
- * audio paths (radio_nxdn.c). radio_sm.c calls these from the radio task
+ * audio paths (radio_nxdn.c), P25 trunking on P25's path (radio_p25t.c). radio_sm.c calls these from the radio task
  * only; none blocks. The radio core keeps the policy (TX rules, time-out,
  * busy lockout, scan, display); this side keeps the modem, the codec and
  * the frames. Host tests supply their own implementation. */
@@ -14,13 +14,20 @@
  * sends a frame at least every 180 ms during a call, NXDN every 80 ms. */
 #define RADIO_DV_BUSY_MS 400u
 
+#define RADIO_DV_NAC_ANY 0xF7Eu  /* nac_rx that hears every NAC (CODEPLUG_NAC_ANY) */
+
+/* How a trunking PTT ended without a call (radio_dv_status_t.tx_reason; above the NT_* values) */
+enum { RADIO_DV_TRUNK_REFUSED = 0x40, RADIO_DV_TRUNK_NO_TX = 0x41, RADIO_DV_TRUNK_NO_ANSWER = 0x42 };
+
 typedef struct {
-    uint8_t mode;               /* radio_mode_t: RADIO_MODE_P25 or RADIO_MODE_NXDN */
-    uint32_t rx_hz, tx_hz;
+    uint8_t mode;               /* radio_mode_t: RADIO_MODE_P25, _NXDN or _P25_TRUNK */
+    uint32_t rx_hz, tx_hz;      /* trunking: the control channel and its inbound */
     uint8_t power;              /* board power level for TX */
     uint16_t nac_rx, nac_tx, talkgroup;   /* NXDN: the RAN in nac_*, the group in talkgroup */
     uint32_t unit_id;
     bool hear_all;
+    uint32_t wacn;              /* trunking: the system */
+    uint16_t sysid;
 } radio_dv_cfg_t;
 
 typedef struct {
@@ -36,6 +43,8 @@ typedef struct {
     uint32_t tx_calls;          /* transmissions ended so far */
     uint8_t tx_reason;          /* how the last one ended: NT_* (native_test.h) */
     uint32_t tx_blocks;         /* P25: 30 ms blocks it sent; NXDN: 80 ms frames */
+    uint8_t trunk_state;        /* trunking: p25t_su_state (hunting, control channel, voice, request, queued) */
+    bool trunk_registered, trunk_affiliated;
 } radio_dv_status_t;
 
 /* NULL leaves the channel and hands the board back in FM before returning.

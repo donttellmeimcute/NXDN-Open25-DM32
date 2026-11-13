@@ -27,5 +27,15 @@ void p25_lab_rx_status_get(p25_lab_rx_status *);
 int p25_lab_live_begin(uint32_t session);
 int p25_lab_channel_rx(uint32_t frequency_hz);
 void p25_lab_live_up(void);
+#if defined(CONFIG_P25_TRUNK) && CONFIG_P25_TRUNK
+#include "phy_stream.h"
+/* P25 trunking: every dibit the receive session hears also goes to fn (in the P25 worker task); NULL removes it */
+void p25_lab_set_tap(p25_phy_tap fn, void *ctx);
+#endif
+#if defined(CONFIG_P25_TRUNK_TX) && CONFIG_P25_TRUNK_TX
+/* P25 trunking: the inbound packet (a TSDU, one dibit a byte) the next inbound session sends; then its session */
+int p25_lab_inbound_load(const uint8_t *dibits, uint16_t n);
+int p25_lab_inbound_begin(uint32_t session);
+#endif
 #endif
 #endif

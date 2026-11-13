@@ -31,7 +31,7 @@ static const struct { uint8_t slots; uint32_t bw; bool tdma; } chan_type[6] = {
     { 1, 12500, false }, { 1, 12500, false }, { 1, 6250, false }, { 2, 12500, true }, { 4, 25000, true }, { 2, 12500, true },
 };
 
-bool p25t_osp_build(const p25t_osp *m, uint8_t *t)
+bool p25t_osp_build(const p25t_osp *m, uint8_t t[P25T_TSBK_BYTES])
 {
     head(t, m->opcode, m->protect);
     switch (m->opcode) {
@@ -129,7 +129,7 @@ bool p25t_osp_build(const p25t_osp *m, uint8_t *t)
     return true;
 }
 
-bool p25t_osp_parse(const uint8_t *t, p25t_osp *m)
+bool p25t_osp_parse(const uint8_t t[P25T_TSBK_BYTES], p25t_osp *m)
 {
     memset(m, 0, sizeof *m);
     m->opcode = t[0] & 0x3fu;
@@ -242,7 +242,7 @@ bool p25t_osp_parse(const uint8_t *t, p25t_osp *m)
     }
 }
 
-bool p25t_isp_build(const p25t_isp *m, uint8_t *t)
+bool p25t_isp_build(const p25t_isp *m, uint8_t t[P25T_TSBK_BYTES])
 {
     head(t, m->opcode, false);
     switch (m->opcode) {
@@ -275,7 +275,7 @@ bool p25t_isp_build(const p25t_isp *m, uint8_t *t)
     return true;
 }
 
-bool p25t_isp_parse(const uint8_t *t, p25t_isp *m)
+bool p25t_isp_parse(const uint8_t t[P25T_TSBK_BYTES], p25t_isp *m)
 {
     memset(m, 0, sizeof *m);
     m->opcode = t[0] & 0x3fu;

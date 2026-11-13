@@ -235,6 +235,56 @@ static int live_run(void)
     return ok && !stop_requested && !live_overflows && released;
 }
 #endif
+#if CONFIG_P25_TRUNK_TX
+/* P25 trunking's inbound packet: lead blocks (the PA ramps), the TSDU, a tail block; no audio, no codec */
+static uint8_t inbound[P25_PHY_SYMBOLS*2];
+static uint16_t inbound_n;
+int p25_lab_inbound_load(const uint8_t *dibits,uint16_t n)
+{
+    taskENTER_CRITICAL();
+    int ok=state!=1 && n<=sizeof inbound;
+    if (ok) { memcpy(inbound,dibits,n);inbound_n=n; }
+    taskEXIT_CRITICAL();
+    return ok;
+}
+int p25_lab_inbound_begin(uint32_t sid)
+{
+    taskENTER_CRITICAL();
+    int ok=worker && state!=1 && inbound_n;
+    if (ok) { live_sid=sid;stop_requested=0;request_mode=6;state=1; }
+    taskEXIT_CRITICAL();
+    if (ok)xTaskNotifyGive(worker);
+    return ok;
+}
+static int inbound_run(void)
+{
+    uint32_t sid=live_sid;
+    uint8_t raw[36],queued=0;
+    unsigned lead=3,at=0;
+    bool kicked=false,sealed=false;
+    int ok=1;
+    native_state=NT_ARMED;native_reason=NT_OK;
+    while (ok && !stop_requested) {
+        if (!native_lab_live_poll(sid,&native_state,&native_reason,&queued) || native_state==NT_FAULT) { ok=0;break; }
+        if (native_state==NT_STOPPED) { ok=sealed && native_reason==NT_TX_COMPLETE;break; }
+        while (!sealed && queued<NT_TX_CAP) {
+            if (lead) { memset(raw,0x77,sizeof raw);lead--; }
+            else if (at<inbound_n) at+=(unsigned)p25_phy_tx_pack(inbound+at,inbound_n-at,raw);
+            else { memset(raw,0x77,sizeof raw);sealed=true; }
+            if (!native_lab_live_block(sid,raw,sealed)) { ok=0;break; }
+            queued++;
+        }
+        if (ok && !kicked && sealed) { kicked=native_lab_live_go(sid)!=0;if (!kicked) ok=0; }
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
+    native_lab_voice_stop(sid);
+    uint32_t end=hal_millis()+500;
+    int released;
+    while (!(released=native_lab_voice_release(sid)) && (int32_t)(hal_millis()-end)<0) vTaskDelay(pdMS_TO_TICKS(2));
+    inbound_n=0;
+    return ok && released;
+}
+#endif
 int p25_lab_busy(void) { return state==1; }
 static uint16_t u16(const uint8_t *p) { return (uint16_t)(p[0]|p[1]<<8); }
 static uint32_t u32(const uint8_t *p) { return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24; }
@@ -284,9 +334,20 @@ static void reset_stream(void)
     memset(&phy,0,sizeof phy);
 }
 #endif
+#if CONFIG_P25_TRUNK
+static p25_phy_tap trunk_tap;
+static void *trunk_tap_ctx;
+void p25_lab_set_tap(p25_phy_tap fn,void *ctx)
+{
+    taskENTER_CRITICAL();trunk_tap=fn;trunk_tap_ctx=ctx;taskEXIT_CRITICAL();
+}
+#endif
 static void consume(uint32_t seq,uint8_t kind,const uint8_t raw[36])
 {
     uint32_t at=hal_micros();
+#if CONFIG_P25_TRUNK
+    taskENTER_CRITICAL();phy.tap=trunk_tap;phy.tap_ctx=trunk_tap_ctx;taskEXIT_CRITICAL();
+#endif
     uint32_t prior_gaps=phy.gaps;
     uint32_t prior_frames=voice.rx_frames;
     if(p25_phy_rx_record(&phy,&voice,seq,kind,raw)) {
@@ -440,6 +501,9 @@ static void run(void *ctx)
 #endif
 #if CONFIG_P25_NATIVE
         if(request_mode==4) ok=live_run(); else
+#endif
+#if CONFIG_P25_TRUNK_TX
+        if(request_mode==6) ok=inbound_run(); else
 #endif
         ok=receive_run();
         uint32_t free_bytes=(uint32_t)uxTaskGetStackHighWaterMark(NULL)*sizeof(StackType_t);
