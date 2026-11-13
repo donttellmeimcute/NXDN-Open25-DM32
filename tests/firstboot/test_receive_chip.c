@@ -18,7 +18,7 @@ int main(void)
     hrc7000_t modem={.regs=regs,.buf=ram};hn_chip chip;nt_ops ops;nt_test test;
     hn_hooks hooks={NULL,prepare,off,key,key,irq_on,noop,noop,restore,NULL,NULL};
     hn_init(&chip,&modem,&hooks,&ops);nt_init(&test,&ops);
-    nt_config cfg={145500000,2,2000,250,NT_RECEIVE,1,0};
+    nt_config cfg={145500000,2,2000,250,NT_RECEIVE,1,0,0};
     assert(nt_arm(&test,&cfg,0) && nt_begin(&test,test.session,0));
     for(unsigned i=0;i<36;i++)ram[C7_RX_RAM+0x30+i]=(uint8_t)(0x40+i);
     regs[C7_RX_TYPE_INFO/4]=0x12345000;

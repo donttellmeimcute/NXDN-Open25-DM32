@@ -4,7 +4,6 @@
 #include "hrc_native_port.h"
 static hn_chip native_chip;
 nt_ops dm32_native_ops;
-#if CONFIG_DEV_TX
 void dm32_native_mic_route(bool on)
 {
     if (on) {
@@ -13,13 +12,14 @@ void dm32_native_mic_route(bool on)
         hrc_pin_write(PIN_MIC_PATH,false);
     } else speaker_source();
 }
-#endif
 static int native_prepare(void *ctx, const nt_config *c)
 {
     (void)ctx;
     if (mode!=RADIO_MODE_FM || transmitting || (TMR_CTRL(6)&1u) || (TMR_CTRL(TIMER_PA)&1u)) return 0;
+    /* TX needs the factory calibration: the board's power ramp reads it. */
+    if (c->mode==NT_TRANSMIT && !bf_cal_valid()) return 0;
 #if CONFIG_DEV_TX
-    if(c->mode==NT_TRANSMIT && (!bf_cal_valid() || !firstboot_native_tx_open(native_chip.test)))return 0;
+    if(c->mode==NT_TRANSMIT && !firstboot_native_tx_open(native_chip.test))return 0;
 #endif
     hrc_audio_pcm_hold(true);
     audio(false);
@@ -28,7 +28,8 @@ static int native_prepare(void *ctx, const nt_config *c)
     if (!rx(c->frequency_hz,RADIO_BW_12K5,NULL)) return 0;
     /* Audio sessions may feed the speaker FIFO; raw PHY bench sessions hold it. */
     if (c->mode==NT_RECEIVE && c->audio) hrc_audio_pcm_hold(false);
-    return c->mode!=NT_TRANSMIT || tx(c->frequency_hz,RADIO_BW_12K5,0,NULL);
+    /* The board's own TX entry: band limits and the calibrated power level. */
+    return c->mode!=NT_TRANSMIT || tx(c->frequency_hz,RADIO_BW_12K5,c->power,NULL);
 }
 static void native_off(void *ctx) {
     (void)ctx;

@@ -111,10 +111,9 @@ int nt_arm_voice(nt_test *t,uint32_t hz,uint32_t ms)
                  .mode=NT_RECEIVE,.p25_sync=1,.audio=1};
     return arm(t,&c,0,1);
 }
-#if defined(CONFIG_DEV_TX) && CONFIG_DEV_TX
-int nt_arm_live(nt_test *t,uint32_t hz)
+int nt_arm_live(nt_test *t,uint32_t hz,uint8_t power)
 {
-    nt_config c={.frequency_hz=hz,.lease_ms=250,.mode=NT_TRANSMIT,.p25_sync=1,.audio=1};
+    nt_config c={.frequency_hz=hz,.lease_ms=250,.mode=NT_TRANSMIT,.p25_sync=1,.audio=1,.power=power};
     return arm(t,&c,1,1);
 }
 int nt_arm_live_rx(nt_test *t,uint32_t hz)
@@ -129,7 +128,6 @@ int nt_live_seal(nt_test *t,uint32_t sid)
     t->config.blocks=t->stats.tx_loaded;
     return 1;
 }
-#endif
 int nt_load(nt_test *t, uint32_t sid, uint32_t index, const uint8_t raw[36])
 {
     unsigned capacity=nt_tx_preloaded(&t->config) ? NT_TX_STORAGE_CAP : NT_TX_CAP;

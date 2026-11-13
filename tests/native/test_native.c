@@ -15,7 +15,7 @@ static void key(void *p) { ((mock*)p)->keys++; }
 static void off(void *p) { ((mock*)p)->offs++; }
 static int restore(void *p) { mock *x=p; x->restores++; return !x->bad_restore; }
 static nt_ops ops={&m,start,write_block,cancel,request,key,off,restore,NULL,NULL,NULL};
-static nt_config cfg(unsigned mode,unsigned count) { return (nt_config){145500000,count,2000,250,mode,1,0}; }
+static nt_config cfg(unsigned mode,unsigned count) { return (nt_config){145500000,count,2000,250,mode,1,0,0}; }
 static void reset(void) { memset(&m,0,sizeof m); nt_init(&t,&ops); }
 static void load(unsigned index) { uint8_t b[36]; for(unsigned j=0;j<36;j++) b[j]=(uint8_t)(index*37+j); assert(nt_load(&t,t.session,index,b)); }
 static void begin(unsigned mode,unsigned count,uint32_t now)
@@ -182,7 +182,7 @@ static void chip_tests(void)
     unsigned untouched[]={C7_RF_MODE,C7_RF_MOD_BIAS,C7_DEV_LIMITER,C7_SIG_CENTER,0x16c,0x1ac};
     for(unsigned i=0;i<6;i++) assert(regs[untouched[i]/4]==before[untouched[i]/4]);
     assert(prep_count==1 && fast_count==1 && irq_count==1 && restore_count==1);
-    assert(nt_arm(&t,&(nt_config){145500000,2,2000,250,NT_TRANSMIT,0,0},1)); load(0);load(1);
+    assert(nt_arm(&t,&(nt_config){145500000,2,2000,250,NT_TRANSMIT,0,0,0},1)); load(0);load(1);
     /* TX start writes no block and no send bit; neither does a slot vector. */
     assert(nt_begin(&t,t.session,0) && buf[0]==0xcc && buf[36]==0xcc && regs[C7_LAYER2_TXRX_CTRL/4]==0);
     hn_slot(&chip,NT_IRQ_TX_SLOT,500);

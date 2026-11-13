@@ -1,0 +1,628 @@
+--- a/core/radio/radio.h
++++ b/core/radio/radio.h
+@@ -177,6 +177,23 @@
+ 	uint32_t underruns;	// TX voice frames sent as silence (diagnostics)
+ } radio_dmr_view_t;
+ #endif
++
++// What a digital voice channel (P25 on the native modem; radio_dv.h) is doing, for the screens
++typedef enum { RDV_IDLE, RDV_RX, RDV_RX_OTHER, RDV_TX } radio_dv_state_t;
++typedef struct {
++	bool active;		// the channel's receiver runs
++	uint8_t state;		// radio_dv_state_t
++	uint16_t nac;		// NAC of the call (RX) or ours (TX)
++	uint16_t talkgroup;	// the call's talkgroup, or ours while transmitting
++	uint32_t source;	// the caller's unit ID, or ours while transmitting
++	bool encrypted;		// the call heard is encrypted: muted, never decrypted
++	bool emergency;
++	uint32_t call_ms;	// hal_millis() when the call (RX or TX) began
++	// The last call heard
++	uint16_t last_talkgroup;
++	uint32_t last_source;
++	uint32_t last_ms;	// hal_millis() of its end, 0 = none
++} radio_dv_view_t;
+ 
+ #if CONFIG_DMR_ROAMING
+ #define RADIO_ROAM_SITES	16	// = ROAM_SITES_MAX (radio/roam.h)
+@@ -297,6 +314,7 @@
+ 	uint32_t bcast_khz;		// what the receiver reports it is tuned to, for the debug link (0 = not playing)
+ #if CONFIG_DMR
+ 	radio_dmr_view_t dmr;
++	radio_dv_view_t dv;	// P25 channels (RADIO_SM_DV)
+ #endif
+ #if CONFIG_DMR_ROAMING
+ 	radio_roam_view_t roam;
+--- a/core/radio/radio_sm.h
++++ b/core/radio/radio_sm.h
+@@ -21,6 +21,8 @@
+ #endif
+ 
+ #define RADIO_SM_CW		(CONFIG_HOTSPOT || CONFIG_SFR_CWID)	// the CW keyer (radio_sm.c)
++// Digital voice channels on the modem's native physical layer (the multi-mode derivative's core/p25)
++#define RADIO_SM_DV		(CONFIG_P25 && CONFIG_P25_NATIVE)
+ #define RADIO_POLL_MS		25	// status poll and squelch period
+ #define RADIO_RETUNE_SETTLE_MS	400	// RREQ_RETUNE: tune once the reference trim has held this long
+ #define RADIO_TICK_MS		10	// DMR call stack poll (radio_sm_tick)
+@@ -265,6 +267,10 @@
+ 	int8_t green_out;
+ 	int8_t red_out;
+ 	bool hotspot;			// hotspot mode: the host link owns the modem
++	bool dv_running;		// a P25 channel's native session runs (radio_dv.h); the board is the modem's
++	bool dv_tot;			// the time-out ended this digital transmission: denied once it has gone off air
++	uint32_t dv_tx_calls;		// radio_dv_status_t.tx_calls when this transmission began
++	uint32_t dv_now_ms;		// the time of the last poll or tick (radio_dv_status ages its frames by it)
+ 
+ 	radio_settings_t set;		// the settings in effect
+ 	uint32_t activity_ms;		// last request, reception or transmission (battery save)
+--- a/core/radio/radio_sm.c
++++ b/core/radio/radio_sm.c
+@@ -29,6 +29,9 @@
+ #endif
+ #include "radio/beep.h"	// beep_t (beep_play only with CONFIG_BEEP)
+ #include "radio/vibe.h"	// vibe_t (vibe_play only with CONFIG_VIBRATE)
++#if RADIO_SM_DV
++#include "p25/radio_dv.h"	// P25 channels on the modem's native physical layer (the multi-mode derivative)
++#endif
+ #if CONFIG_NET_USRP || CONFIG_APRS_RX
+ #include "usbaudio/audio_mux.h"	// the PCM stream shared with a host audio session and APRS
+ #endif
+@@ -359,6 +362,11 @@
+ 	bool fm = sm->view.ch.mode == RADIO_MODE_FM && !sm->hotspot;
+ 	bool open = !tx && fm && (sm->view.monitor || sm->view.state == RS_RX);
+ 	bool green = open;
++#if RADIO_SM_DV
++	if (sm->dv_running && !tx && sm->view.state == RS_RX) {
++		green = true;		// a P25 call plays (its PCM goes out from the native session's worker)
++	}
++#endif
+ #if CONFIG_DMR
+ 	if (!fm && !tx && sm->view.state == RS_RX && sm->view.dmr.state == RDMR_RX) {
+ 		green = true;
+@@ -420,6 +428,10 @@
+ // Receive on what view.ch says now
+ static void dmr_begin(radio_sm_t *sm);
+ static void dmr_end(radio_sm_t *sm);
++#if RADIO_SM_DV
++static void dv_begin(radio_sm_t *sm);
++static void dv_end(radio_sm_t *sm);
++#endif
+ 
+ #if CONFIG_BCAST_FM
+ // The broadcast receiver on or off. Off mutes it first
+@@ -516,6 +528,12 @@
+ 	radio_mode_t mode = (CONFIG_DMR && sm->view.ch.mode == RADIO_MODE_DMR) ? RADIO_MODE_DMR : RADIO_MODE_FM;
+ 	// No sub-audio squelch in DMR, whatever tone the channel or the VFO still holds from its FM settings
+ 	static const subtone_t no_tone = { TONE_NONE, 0 };
++#if RADIO_SM_DV
++	bool dv = codeplug_mode_digital_voice(sm->view.ch.mode);
++	if (sm->dv_running && (!dv || sm->view.am || sm->view.bcast)) {
++		dv_end(sm);		// the native session lets go: the board is in FM again
++	}
++#endif
+ 	if (sm->board_mode == RADIO_MODE_DMR && mode != RADIO_MODE_DMR) {
+ 		dmr_end(sm);		// the call stack lets go of the modem before the chip leaves DMR
+ 	}
+@@ -523,6 +541,15 @@
+ 		sm->board_mode = mode;
+ 		board.radio->set_mode(mode);
+ 	}
++#if RADIO_SM_DV
++	if (dv && !sm->view.am && !sm->view.bcast) {
++		// The native session tunes the receiver itself (from FM, which the board is in now)
++		dv_begin(sm);
++		outputs(sm);
++		changed(sm);
++		return;
++	}
++#endif
+ #if CONFIG_AM_RX
+ 	if (sm->view.am && !board.radio->rx_am(sm->view.ch.rx_hz, (radio_bw_t)sm->view.ch.bw)) {
+ 		sm->view.am = false;	// the board refused: FM as before (TX stays refused in the air band)
+@@ -801,9 +828,52 @@
+ 	return noise < radio_sm_squelch_open_below(sq);
+ }
+ 
++#if RADIO_SM_DV
++// --- P25 channels: the native session (radio_dv.h) keeps the modem; the radio core keeps the policy ---
++
++// The unit ID our calls carry: the channel's ID override, else the radio's DMR ID
++static uint32_t dv_unit_id(const channel_t *ch)
++{
++	return ch->dmr_id != 0 ? ch->dmr_id : codeplug_dmr_id();
++}
++
++static void dv_begin(radio_sm_t *sm)
++{
++	const channel_t *ch = &sm->view.ch;
++	radio_dv_cfg_t c = {
++		.mode = ch->mode, .rx_hz = ch->rx_hz, .tx_hz = ch->tx_hz, .power = sm->view.power,
++		.nac_rx = ch->nac_rx, .nac_tx = ch->nac_tx, .talkgroup = ch->talkgroup, .unit_id = dv_unit_id(ch),
++		.hear_all = ch->hear_all,
++	};
++	sm->dv_running = radio_dv_select(&c);
++	memset(&sm->view.dv, 0, sizeof(sm->view.dv));
++	sm->view.dv.active = sm->dv_running;
++}
++
++static void dv_end(radio_sm_t *sm)
++{
++	if (sm->dv_running) {
++		radio_dv_select(NULL);	// the board is back in FM when this returns
++		sm->dv_running = false;
++		sm->board_mode = RADIO_MODE_FM;
++	}
++	sm->view.dv.active = false;
++	sm->view.dv.state = RDV_IDLE;
++}
++#endif
++
+ // Busy channel lockout (FM): refuse while the channel is in use (by anyone, or by a group with another tone)
+ static bool bcl_busy(const radio_sm_t *sm)
+ {
++#if RADIO_SM_DV
++	// P25: CARRIER refuses while frames of any NAC are heard; WRONG_TONE ("NAC") while frames of another NAC are,
++	// the channel used by a group we don't hear (as an FM carrier without our tone). Our own NAC's call: talk back
++	if (sm->dv_running && sm->set.bcl != RADIO_BCL_OFF) {
++		radio_dv_status_t s;
++		radio_dv_status(&s, sm->dv_now_ms);
++		return sm->set.bcl == RADIO_BCL_CARRIER ? s.sync : (s.sync && !s.sync_ours);
++	}
++#endif
+ 	if (sm->view.ch.mode != RADIO_MODE_FM || sm->set.bcl == RADIO_BCL_OFF) {
+ 		return false;
+ 	}
+@@ -836,9 +906,19 @@
+ 	if (ch->rx_only) {
+ 		return TXDENY_RX_ONLY;
+ 	}
+-	if (ch->mode == RADIO_MODE_DMR ? !CONFIG_DMR : !CONFIG_FM) {
++	if (ch->mode == RADIO_MODE_DMR ? !CONFIG_DMR : ch->mode == RADIO_MODE_FM ? !CONFIG_FM : !RADIO_SM_DV) {
+ 		return TXDENY_MODE;
+ 	}
++#if RADIO_SM_DV
++	if (codeplug_mode_digital_voice(ch->mode)) {
++		if (ch->mode != RADIO_MODE_P25 || !sm->dv_running) {
++			return TXDENY_MODE;		// NXDN and trunking come later; or the native session didn't start
++		}
++		if (dv_unit_id(ch) == 0 || ch->talkgroup == 0) {
++			return TXDENY_NO_ID;		// a P25 call needs our unit ID and a talkgroup (TIA-102.BAAD-B 6.1.1.1)
++		}
++	}
++#endif
+ 	if (!board_in_band(ch->tx_hz, true)) {
+ 		return TXDENY_BAND;
+ 	}
+@@ -877,6 +957,102 @@
+ 		beep(sm, BEEP_TOT_WARN);
+ 	}
+ }
++
++#if RADIO_SM_DV
++// PTT on a P25 channel: the TX rules passed (tx_check); the native session switches to transmit
++static void dv_ptt_down(radio_sm_t *sm, uint32_t now_ms)
++{
++	radio_dv_status_t s;
++	radio_dv_status(&s, now_ms);
++	if (!radio_dv_ptt(true)) {
++		deny(sm, TXDENY_MODE);
++		return;
++	}
++	sm->dv_tx_calls = s.tx_calls;
++	sm->dv_tot = false;
++	sm->view.state = RS_TX;
++	sm->view.tx_auto = false;
++	sm->view.last_tx_ms = now_ms != 0 ? now_ms : 1;
++	sm->view.tx_deny = TXDENY_NONE;
++	sm->view.tx_elapsed_ms = 0;
++	sm->tx_start_ms = now_ms;
++	sm->view.dv.state = RDV_TX;
++	sm->view.dv.nac = sm->view.ch.nac_tx;
++	sm->view.dv.talkgroup = sm->view.ch.talkgroup;
++	sm->view.dv.source = dv_unit_id(&sm->view.ch);
++	sm->view.dv.encrypted = sm->view.dv.emergency = false;
++	sm->view.dv.call_ms = now_ms;
++	outputs(sm);
++	changed(sm);
++}
++
++// The native session's state into the view: calls heard, the end of our transmission, its time-out
++static void dv_follow(radio_sm_t *sm, uint32_t now_ms)
++{
++	radio_dv_status_t s;
++	radio_dv_view_t *v = &sm->view.dv;
++	radio_dv_status(&s, now_ms);
++	if (s.active != v->active) {
++		v->active = s.active;
++		changed(sm);
++	}
++	if (sm->view.state == RS_TX) {
++		tx_timer(sm, now_ms);
++		if (!sm->dv_tot && sm->view.tot_s != 0 && sm->view.tx_elapsed_ms >= (uint32_t)sm->view.tot_s * 1000u) {
++			sm->dv_tot = true;
++			radio_dv_ptt(false);	// the terminator goes out, then the PA drops
++		}
++		bool ended = s.tx_calls != sm->dv_tx_calls;
++		if (!ended && (sm->ptt || s.transmitting)) {
++			return;			// still on air, or still to start
++		}
++		uint8_t why = sm->dv_tot ? TXDENY_TIMEOUT : ended ? radio_dv_tx_deny(s.tx_reason) : TXDENY_NONE;
++		v->state = RDV_IDLE;
++		sm->tx_end_ms = now_ms;
++		if (why != TXDENY_NONE && sm->ptt) {
++			deny(sm, why);		// shown until PTT is released
++			return;
++		}
++		sm->view.state = RS_IDLE;
++		sm->view.tot_warning = false;
++		outputs(sm);
++		changed(sm);
++		return;
++	}
++	if (sm->view.state == RS_TX_DENIED) {
++		return;
++	}
++	bool rx = s.playing;
++	uint8_t st = rx ? RDV_RX : s.sync ? RDV_RX_OTHER : RDV_IDLE;
++	if (rx && sm->view.state != RS_RX) {
++		sm->view.state = RS_RX;
++		v->call_ms = now_ms;
++		changed(sm);
++	} else if (!rx && sm->view.state == RS_RX) {
++		end_reception(sm, now_ms);
++		v->last_talkgroup = v->talkgroup;
++		v->last_source = v->source;
++		v->last_ms = now_ms != 0 ? now_ms : 1;
++		changed(sm);
++	}
++	if (rx) {
++		activity(sm, now_ms);
++	}
++	if (st != v->state || (s.sync && (s.nac != v->nac || s.talkgroup != v->talkgroup || s.source != v->source ||
++			s.encrypted != v->encrypted || s.emergency != v->emergency))) {
++		v->state = st;
++		if (s.sync) {
++			v->nac = s.nac;
++			v->talkgroup = s.talkgroup;
++			v->source = s.source;
++			v->encrypted = s.encrypted;
++			v->emergency = s.emergency;
++		}
++		changed(sm);
++	}
++	outputs(sm);
++}
++#endif
+ 
+ // --- DMR: the call stack on DMR channels (core/dmr/call), voice through core/dmr/ambe ---
+ #if CONFIG_DMR
+@@ -2744,6 +2920,19 @@
+ 	bool dmr = sm->view.ch.mode == RADIO_MODE_DMR;
+ 	bool carrier = carrier_heard(sm, st->noise);
+ 	bool active, sync = false;
++#if RADIO_SM_DV
++	if (sm->dv_running) {
++		// P25: stop on frames with our NAC (or any, on a channel that hears every NAC); a call that plays holds the
++		// stop. Another NAC's frames are a carrier only. The probe and sync windows are DMR's: a session starts,
++		// then frames come every 180 ms at most
++		radio_dv_status_t s;
++		radio_dv_status(&s, now_ms);
++		dmr = true;
++		active = sm->view.state == RS_RX;
++		sync = s.sync_ours;
++		carrier = carrier || s.sync;
++	} else
++#endif
+ #if CONFIG_DMR
+ 	if (dmr) {
+ 		active = sm->view.dmr.state == RDMR_RX;
+@@ -3754,6 +3943,12 @@
+ 		deny(sm, reason);
+ 		return;
+ 	}
++#if RADIO_SM_DV
++	if (sm->dv_running) {
++		dv_ptt_down(sm, now_ms);
++		return;
++	}
++#endif
+ #if CONFIG_DMR
+ 	if (sm->view.ch.mode == RADIO_MODE_DMR) {
+ 		dmr_ptt_down(sm, now_ms);
+@@ -3799,6 +3994,13 @@
+ 	}
+ 	sm->ptt = false;
+ 	activity(sm, now_ms);
++#if RADIO_SM_DV
++	if (sm->dv_running && sm->view.state == RS_TX) {
++		radio_dv_ptt(false);	// the terminator goes out; dv_follow ends RS_TX once it is off air
++		dv_follow(sm, now_ms);
++		return;
++	}
++#endif
+ 	if (sm->host_audio) {
+ 		roger = false;		// the host sends its own audio, tones included
+ 	}
+@@ -5729,6 +5931,9 @@
+ 		st.tone_ok = true;
+ 	}
+ #endif
++#if RADIO_SM_DV
++	sm->dv_now_ms = now_ms;
++#endif
+ 	sm->view.rssi_dbm = rssi_held(sm, st.rssi_dbm);
+ 	sm->view.noise = st.noise;
+ #if CONFIG_DMR
+@@ -5798,6 +6003,12 @@
+ 	}
+ #endif
+ #endif
++#if RADIO_SM_DV
++	if (sm->dv_running) {
++		outputs(sm);
++		return;		// the state follows the native session (radio_sm_tick); its TX time-out is dv_follow's
++	}
++#endif
+ 
+ 	if (sm->view.state == RS_TX) {
+ #if CONFIG_FM_TX_TONES
+@@ -5920,6 +6131,12 @@
+ #if RADIO_SM_CW
+ 	cw_service(sm, now_ms);
+ #endif
++#if RADIO_SM_DV
++	sm->dv_now_ms = now_ms;
++	if (sm->dv_running) {
++		dv_follow(sm, now_ms);
++	}
++#endif
+ #if CONFIG_DMR
+ 	if (sm->dmr_running) {
+ 		dmr_call_poll(now_ms);
+--- a/tests/host/radioCoreTest.c
++++ b/tests/host/radioCoreTest.c
+@@ -4613,8 +4613,216 @@
+ #endif
+ #endif
+ 
++#if RADIO_SM_DV
++// ---- P25 channels: a fake native session behind radio_dv.h ----
++#include "p25/radio_dv.h"
++enum { NT_USER_STOP_ = 1, NT_TX_COMPLETE_ = 3, NT_LATE_ = 8, NT_DENIED_ = 14 };	// native_test.h
++static struct {
++	bool selected, refuse;
++	radio_dv_cfg_t cfg;
++	int selects, leaves, downs, ups;
++	radio_dv_status_t st;
++} dv;
++bool radio_dv_select(const radio_dv_cfg_t *c)
++{
++	if (c == NULL) {
++		dv.leaves += dv.selected;
++		dv.selected = false;
++		return true;
++	}
++	if (dv.refuse) {
++		return false;
++	}
++	dv.selected = true;
++	dv.cfg = *c;
++	dv.selects++;
++	return true;
++}
++bool radio_dv_ptt(bool down)
++{
++	if (!dv.selected) {
++		return false;
++	}
++	if (down) {
++		dv.downs++;
++		dv.st.transmitting = true;
++	} else {
++		dv.ups++;
++	}
++	return true;
++}
++void radio_dv_status(radio_dv_status_t *o, uint32_t now_ms)
++{
++	(void)now_ms;
++	*o = dv.st;
++	o->active = dv.selected;
++}
++uint8_t radio_dv_tx_deny(uint8_t r)
++{
++	return r == 0 || r == NT_USER_STOP_ || r == NT_TX_COMPLETE_ ? TXDENY_NONE : r == NT_DENIED_ ? TXDENY_REJECTED : TXDENY_NO_DMR;
++}
++static void dv_tx_ended(uint8_t reason)
++{
++	dv.st.transmitting = false;
++	dv.st.tx_calls++;
++	dv.st.tx_reason = reason;
++}
++static void dv_heard(bool ours, bool playing, uint16_t tg, uint32_t src)
++{
++	dv.st.sync = true;
++	dv.st.sync_ours = ours;
++	dv.st.playing = playing;
++	dv.st.talkgroup = tg;
++	dv.st.source = src;
++	dv.st.nac = ours ? 0x293 : 0x5A5;
++}
++static void dv_quiet(void) { dv.st.sync = dv.st.sync_ours = dv.st.playing = false; }
++
++static void test_p25_channel(void)
++{
++	setup_codeplug();
++	add(3, "P25 Ops", 155475000, RADIO_MODE_P25, false, 2);
++	chans[3].nac_rx = 0x293;
++	chans[3].nac_tx = 0x293;
++	chans[3].talkgroup = 100;
++	start();
++	memset(&dv, 0, sizeof(dv));
++	int rx_calls = hw.rx_calls, set_modes = hw.set_mode_calls;
++	req(RREQ_ZONE_POS, 2);
++	run(30);
++	CHECK(sm.view.channel_number == 3 && sm.view.ch.mode == RADIO_MODE_P25);
++	CHECK(dv.selects == 1 && dv.selected && sm.dv_running && sm.view.dv.active);
++	CHECK(dv.cfg.rx_hz == 155475000 && dv.cfg.tx_hz == 155475000 && dv.cfg.power == 2);
++	CHECK(dv.cfg.nac_rx == 0x293 && dv.cfg.nac_tx == 0x293 && dv.cfg.talkgroup == 100);
++	CHECK(dv.cfg.unit_id == own_dmr_id);		// no ID on the channel: the radio's
++	CHECK(hw.rx_calls == rx_calls && hw.set_mode_calls == set_modes);	// the native session tunes, not the core
++	CHECK(!hw.audio);
++
++	// A call for us plays; the FM speaker path stays closed, the green LED lights
++	dv_heard(true, true, 100, 1234567);
++	run(30);
++	CHECK(sm.view.state == RS_RX && sm.view.dv.state == RDV_RX && sm.view.dv.source == 1234567);
++	CHECK(hw.led[LED_GREEN] && !hw.audio);
++	dv_quiet();
++	run(30);
++	CHECK(sm.view.state == RS_IDLE && sm.view.dv.last_source == 1234567 && !hw.led[LED_GREEN]);
++	// Another talkgroup or an encrypted call: seen, not played
++	dv_heard(true, false, 200, 7);
++	run(30);
++	CHECK(sm.view.state == RS_IDLE && sm.view.dv.state == RDV_RX_OTHER && sm.view.dv.talkgroup == 200);
++	dv_quiet();
++	run(30);
++
++	// PTT: the native session transmits; the board's FM transmitter is never keyed
++	req(RREQ_PTT, 1);
++	CHECK(sm.view.state == RS_TX && dv.downs == 1 && hw.tx_calls == 0 && hw.led[LED_RED]);
++	CHECK(sm.view.dv.state == RDV_TX && sm.view.dv.source == own_dmr_id && sm.view.dv.talkgroup == 100);
++	run(1000);
++	CHECK(sm.view.state == RS_TX && sm.view.tx_elapsed_ms >= 990);
++	req(RREQ_PTT, 0);
++	CHECK(dv.ups == 1 && sm.view.state == RS_TX);	// the terminator is still going out
++	run(100);
++	CHECK(sm.view.state == RS_TX);
++	dv_tx_ended(NT_TX_COMPLETE_);
++	run(20);
++	CHECK(sm.view.state == RS_IDLE && !hw.led[LED_RED] && sm.view.dv.state == RDV_IDLE);
++
++	// Time-out: the core ends the call (terminator), then shows the time-out until PTT is released
++	req(RREQ_PTT, 1);
++	CHECK(sm.view.state == RS_TX && dv.downs == 2);
++	run(179000);
++	CHECK(dv.ups == 1 && sm.view.state == RS_TX);
++	run(1010);
++	CHECK(dv.ups == 2 && sm.view.state == RS_TX);	// released for the time-out, terminator on air
++	dv_tx_ended(NT_TX_COMPLETE_);
++	run(20);
++	CHECK(sm.view.state == RS_TX_DENIED && sm.view.tx_deny == TXDENY_TIMEOUT && !hw.led[LED_RED]);
++	req(RREQ_PTT, 0);
++	CHECK(sm.view.state == RS_IDLE && dv.ups == 2);
++
++	// A modem fault on air: off at once, shown until release
++	req(RREQ_PTT, 1);
++	run(200);
++	dv_tx_ended(NT_LATE_);
++	run(20);
++	CHECK(sm.view.state == RS_TX_DENIED && sm.view.tx_deny == TXDENY_NO_DMR && !hw.led[LED_RED]);
++	req(RREQ_PTT, 0);
++	CHECK(sm.view.state == RS_IDLE);
++	// The board refused (band, calibration, battery, the laboratory gate)
++	req(RREQ_PTT, 1);
++	dv_tx_ended(NT_DENIED_);
++	run(20);
++	CHECK(sm.view.state == RS_TX_DENIED && sm.view.tx_deny == TXDENY_REJECTED);
++	req(RREQ_PTT, 0);
++	// Released before the session started: nothing went out, back to receive
++	req(RREQ_PTT, 1);
++	dv.st.transmitting = false;
++	req(RREQ_PTT, 0);
++	run(20);
++	CHECK(sm.view.state == RS_IDLE);
++
++	// Busy channel lockout. CARRIER: any P25 frames. WRONG_TONE ("NAC"): frames of another NAC only
++	sm.set.bcl = RADIO_BCL_CARRIER;
++	dv_heard(true, true, 100, 55);
++	run(30);
++	req(RREQ_PTT, 1);
++	CHECK(sm.view.state == RS_TX_DENIED && sm.view.tx_deny == TXDENY_BUSY && dv.downs == 5);
++	req(RREQ_PTT, 0);
++	sm.set.bcl = RADIO_BCL_WRONG_TONE;
++	req(RREQ_PTT, 1);
++	CHECK(sm.view.state == RS_TX && dv.downs == 6);	// our own NAC's call: talk back
++	dv_tx_ended(NT_TX_COMPLETE_);
++	req(RREQ_PTT, 0);
++	run(20);
++	dv_heard(false, false, 0, 0);
++	run(30);
++	req(RREQ_PTT, 1);
++	CHECK(sm.view.state == RS_TX_DENIED && sm.view.tx_deny == TXDENY_BUSY && dv.downs == 6);
++	req(RREQ_PTT, 0);
++	dv_quiet();
++	run(30);
++	sm.set.bcl = RADIO_BCL_OFF;
++
++	// No unit ID anywhere, or no talkgroup: refused before the modem is asked
++	uint32_t id = own_dmr_id;
++	own_dmr_id = 0;
++	req(RREQ_PTT, 1);
++	CHECK(sm.view.state == RS_TX_DENIED && sm.view.tx_deny == TXDENY_NO_ID && dv.downs == 6);
++	req(RREQ_PTT, 0);
++	own_dmr_id = id;
++
++	// Scan: P25 frames with our NAC stop it; another NAC's do not
++	CHECK(zones[0].count == 5);
++	req(RREQ_ZONE_POS, 0);
++	run(30);
++	CHECK(!sm.dv_running && dv.leaves == 1 && hw.rx_hz == 146520000);	// back on FM: the board tunes again
++	req(RREQ_SCAN, RSCAN_ZONE);
++	bool held = false;
++	for (int i = 0; i < 400 && !held; i++) {
++		run(25);
++		if (sm.dv_running) {
++			dv_heard(true, true, 100, 99);
++		} else {
++			dv_quiet();
++		}
++		held = sm.view.scan_phase == SCAN_PH_HOLD && sm.view.channel_number == 3;
++	}
++	CHECK(held);
++	req(RREQ_SCAN, RSCAN_STOP);
++	run(30);
++	dv_quiet();
++	run(30);
++	req(RREQ_ZONE_POS, 0);
++	run(30);
++	CHECK(!sm.dv_running);
++}
++#endif
++
+ int main(void)
+ {
++#if RADIO_SM_DV
++	test_p25_channel();
++#endif
+ 	test_startup();
+ 	test_persist();
+ 	test_channel_step();
+--- a/tests/host/Makefile
++++ b/tests/host/Makefile
+@@ -188,6 +188,12 @@
+                        $(CORE)/ui/ui_svc.h
+ 	$(CC) $(CFLAGS) $(CORE_HAL) -I. -DDMR_RX_TRACE=0 -DCONFIG_DMR_IP_GATEWAY=0 -DCONFIG_SFR=1 -DCONFIG_APRS=0 -DCONFIG_VFO_DMR=0 -o $@ $(RCORE) -lm
+ 
++# The same with P25 channels on the native modem (the multi-mode derivative; radio_dv.h faked in the test)
++TESTS   += radioCoreTestP25
++radioCoreTestP25: $(RCORE) $(wildcard $(CORE)/radio/*.h) $(wildcard $(CORE)/dmr/call/*.h) $(CORE)/dmr/dmrDataService.h \
++                  $(CORE)/ui/ui_svc.h $(CORE)/p25/radio_dv.h
++	$(CC) $(CFLAGS) $(CORE_HAL) -I. -DDMR_RX_TRACE=0 -DCONFIG_DMR_IP_GATEWAY=0 -DCONFIG_SFR=1 -DCONFIG_APRS=0 -DCONFIG_P25=1 -DCONFIG_P25_NATIVE=1 -o $@ $(RCORE) -lm
++
+ # The everyday features (scan, beeps, battery, TOT warning, BCL, roger beep, 1750 Hz burst, VOX, battery saving)
+ TESTS   += radioFeaturesTest
+ RFTEST  := radioFeaturesTest.c $(CORE)/radio/radio_sm.c $(CORE)/radio/tones.c $(RFEAT) $(CORE)/dmr/call/dmr_call.c \
+@@ -281,11 +287,12 @@
+ 	$(CC) $(CFLAGS) -I$(ROOT)/hal -Wshadow -o $@ boardBandTest.c
+ 
+ run: run-core
+-run-core: radioCoreTest radioCoreTestNoVfoDmr radioFeaturesTest radioFeaturesTestNoDual roamTest radioListenBandsTest inputTest aprsRadioTest quadratureTest serialmicTest miclevelTest \
++run-core: radioCoreTest radioCoreTestNoVfoDmr radioCoreTestP25 radioFeaturesTest radioFeaturesTestNoDual roamTest radioListenBandsTest inputTest aprsRadioTest quadratureTest serialmicTest miclevelTest \
+           rx2LinkTest keyassignTest powerSwitchTest boardBandTest batteryTest
+ 	./aprsRadioTest
+ 	./radioCoreTest
+ 	./radioCoreTestNoVfoDmr
++	./radioCoreTestP25
+ 	./radioFeaturesTest
+ 	./radioFeaturesTestNoDual
+ 	./roamTest

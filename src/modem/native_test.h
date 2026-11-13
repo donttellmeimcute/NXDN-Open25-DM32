@@ -39,6 +39,7 @@ typedef struct nt_config {
     uint32_t duration_ms;
     uint16_t lease_ms;
     uint8_t mode, p25_sync, audio;
+    uint8_t power; /* board power level for TX */
 } nt_config;
 static inline int nt_tx_preloaded(const nt_config *c)
 {
@@ -100,10 +101,12 @@ int nt_arm(nt_test *, const nt_config *, int allow_rf);
 /* Internal receive-only audio session: up to 300 s, 10000 records; same lease,
  * ring overflow and fault handling. Not exposed through ordinary ARM. */
 int nt_arm_voice(nt_test *, uint32_t frequency_hz, uint32_t duration_ms);
-#if defined(CONFIG_DEV_TX) && CONFIG_DEV_TX
-int nt_arm_live(nt_test *, uint32_t frequency_hz);
+/* The radio core's channel: open-ended TX (sealed when the call ends) and
+ * RX sessions with a 250/500 ms lease the worker renews. */
+int nt_arm_live(nt_test *, uint32_t frequency_hz, uint8_t power);
 int nt_arm_live_rx(nt_test *, uint32_t frequency_hz);
 int nt_live_seal(nt_test *, uint32_t session);
+#if defined(CONFIG_DEV_TX) && CONFIG_DEV_TX
 enum { NT_TRACE_BLOCKS=192, NT_TRACE_WORDS=26, NT_TRACE_BLOCK_BYTES=44 };
 /* Completed physical PTT call, retained across RX re-arm. Caller excludes IRQs. */
 void nt_trace_summary(uint32_t out[NT_TRACE_WORDS]);

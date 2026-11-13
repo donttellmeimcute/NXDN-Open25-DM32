@@ -41,7 +41,7 @@ int main(void)
     mock_tmr[3]=1;assert(!hn_port_on(&chip,&test));mock_tmr[3]=0;
     mock_tmr[6]=1;assert(!hn_port_on(&chip,&test));mock_tmr[6]=0;
     assert(mock_pic[0]==masks[0] && mock_pic[1]==masks[1] && hrc_irq_table[29]==prior);
-    nt_config c={145500000,3,2000,250,NT_TRANSMIT,1,0};uint8_t raw[36]={0};
+    nt_config c={145500000,3,2000,250,NT_TRANSMIT,1,0,0};uint8_t raw[36]={0};
     assert(nt_arm(&test,&c,1));assert(nt_load(&test,test.session,0,raw));assert(nt_load(&test,test.session,1,raw));
     assert(nt_begin(&test,test.session,0));assert(period==1000 && mock_tmr[6]==3 && !depth);
     assert(!hn_port_on(&chip,&test));
@@ -63,7 +63,7 @@ int main(void)
     uint8_t next[36];memset(next,0xa5,sizeof next);
     clock_us=300000;
     assert(nt_reset(&test));
-    assert(nt_arm_live(&test,145500000));
+    assert(nt_arm_live(&test,145500000,0));
     assert(nt_load(&test,test.session,0,raw) && nt_load(&test,test.session,1,next));
     assert(nt_load(&test,test.session,2,raw) && nt_begin(&test,test.session,clock_us));
     /* The traced order: PHY_RDY, then the TX-slot vector 0.44 ms later. The

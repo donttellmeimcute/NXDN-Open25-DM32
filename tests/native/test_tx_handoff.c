@@ -112,7 +112,7 @@ static unsigned run_driver(const model_t *m, unsigned n, unsigned lose_phy_at)
 	keys = pa_ons = offs = 0;
 	hn_init(&chip, &dev, &hooks, &hw);
 	nt_init(&t, &hw);
-	nt_config c = { 145500000, n, 2000 + n * 30, 250, NT_TRANSMIT, 1, 0 };
+	nt_config c = { 145500000, n, 2000 + n * 30, 250, NT_TRANSMIT, 1, 0, 0 };
 	if (c.duration_ms > NT_MAX_MS) c.duration_ms = NT_MAX_MS;
 	assert(nt_arm(&t, &c, 1));
 	unsigned loaded = 0;

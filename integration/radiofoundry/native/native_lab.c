@@ -13,11 +13,17 @@
 static nt_test test;
 static uint32_t pending_start, battery_at;
 static uint32_t voice_owner;
-#if CONFIG_DEV_TX
-static bool live_enabled, live_rx_pending, live_tx_pending, live_restore_pending;
+/* The digital voice channel the radio core selected (native_lab_channel):
+ * receive between calls, transmit while its PTT is down. */
+static native_channel chan;
+static bool live_enabled, live_rx_pending, live_tx_pending;
 static uint32_t live_summary[5]; /* count, stop reason, blocks sent, PA keys, faults */
-static int live_owner(void) { return voice_owner && test.config.mode==NT_TRANSMIT; }
+#if CONFIG_DEV_TX
+/* Laboratory gate: TX also needs the cable's enable this boot, 145.500 MHz
+ * and the lowest power (firstboot_native_tx_config). */
+static bool lab_armed;
 #endif
+static int live_owner(void) { return voice_owner && test.config.mode==NT_TRANSMIT && test.config.audio; }
 static uint32_t last_req_type,last_req_arg,last_req_ms,ptt_consumed,cancellations,cancel_type,cancel_arg;
 static uint32_t u32(const uint8_t *p) { return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24; }
 static uint16_t u16(const uint8_t *p) { return (uint16_t)(p[0]|p[1]<<8); }
@@ -30,9 +36,11 @@ static void deny(uint32_t sid)
 }
 void native_lab_init(void) {
     pending_start=battery_at=voice_owner=0;
-#if CONFIG_DEV_TX
-    live_enabled=live_rx_pending=live_tx_pending=live_restore_pending=false;
+    live_enabled=live_rx_pending=live_tx_pending=false;
     for (unsigned i=0;i<5;i++) live_summary[i]=0;
+    chan=(native_channel){0};
+#if CONFIG_DEV_TX
+    lab_armed=false;
 #endif
     last_req_type=last_req_arg=last_req_ms=ptt_consumed=cancellations=cancel_type=cancel_arg=0;
     nt_init(&test,board.native_modem);
@@ -46,27 +54,22 @@ static int updater(void) {
 }
 int native_lab_reserved(void) {
     taskENTER_CRITICAL();
-    int r=updater() || voice_owner || test.owned || test.state==NT_ARMED || pending_start;
-#if CONFIG_DEV_TX
-    r=r || live_enabled;
-#endif
+    int r=updater() || voice_owner || test.owned || test.state==NT_ARMED || pending_start || live_enabled;
     taskEXIT_CRITICAL();return r;
 }
 uint32_t native_lab_wait_ms(void)
 {
     taskENTER_CRITICAL();
     uint32_t ms=voice_owner?5u:(test.owned || test.state==NT_ARMED || pending_start)?2u:0u;
-#if CONFIG_DEV_TX
     if (live_enabled && !ms) ms=5;
-#endif
     taskEXIT_CRITICAL();return ms;
 }
+/* The radio core keeps running while its own channel owns the modem: it
+ * holds the policy (PTT, time-out, busy lockout, scan). Bench sessions and
+ * the updater still stop it. */
 int native_lab_owns(void) {
     taskENTER_CRITICAL();
-    int r=updater() || test.owned;
-#if CONFIG_DEV_TX
-    r=r || live_enabled || (live_owner() && test.state==NT_ARMED);
-#endif
+    int r=updater() || (test.owned && !live_enabled);
     taskEXIT_CRITICAL();
     return r;
 }
@@ -81,19 +84,34 @@ static int battery_ok(void)
 static int eligible(const radio_sm_t *sm)
 {
     const radio_view_t *v=&sm->view;
-    if (!board.native_modem || (p25_lab_busy() && !voice_owner) || sm->ptt || sm->hotspot ||
+    if (!board.native_modem || sm->hotspot || v->power_off || !battery_ok()) return 0;
+    if (live_enabled && voice_owner) {
+        /* The radio core's channel: it already applied its TX rules. */
+        if (!codeplug_mode_digital_voice(v->ch.mode)) return 0;
+        if (test.config.mode==NT_TRANSMIT)
+            return chan.tx_hz && test.config.frequency_hz==chan.tx_hz && !v->ch.rx_only && !sm->set.tx_inhibit;
+        return test.config.frequency_hz==chan.rx_hz;
+    }
+    if ((p25_lab_busy() && !voice_owner) || sm->ptt ||
         (v->state!=RS_IDLE && !(voice_owner && v->state==RS_RX)) ||
-        v->ch.mode!=RADIO_MODE_FM || v->am || v->bcast || v->power_off || beep_busy()) return 0;
+        v->ch.mode!=RADIO_MODE_FM || v->am || v->bcast || beep_busy()) return 0;
 #if CONFIG_SCAN
     if (scan_on(&sm->scan)) return 0;
 #endif
     if (board.audio && board.audio->spk_pending && board.audio->spk_pending()) return 0;
-    if (!battery_ok()) return 0;
     if (test.config.mode==NT_TRANSMIT && (v->ch.rx_only || sm->set.tx_inhibit ||
         v->ch.tx_hz!=test.config.frequency_hz)) return 0;
     return test.config.mode==NT_TRANSMIT || v->ch.rx_hz==test.config.frequency_hz;
 }
+static int lab_gate_tx(void)
+{
 #if CONFIG_DEV_TX
+    return lab_armed && chan.tx_hz==145500000u && chan.power==0;
+#else
+    return 1;
+#endif
+}
+/* Start the next session of the channel: TX while PTT is down, else RX. */
 static void live_next(radio_sm_t *sm)
 {
     taskENTER_CRITICAL();
@@ -108,15 +126,15 @@ static void live_next(radio_sm_t *sm)
     if (!tx) live_rx_pending=false;
     if ((tx || rx) && test.state==NT_FAULT) nt_reset(&test);
     uint32_t sid=0;
-    if (tx && nt_arm_live(&test,sm->view.ch.tx_hz)) voice_owner=sid=test.session;
+    if (tx && lab_gate_tx() && nt_arm_live(&test,chan.tx_hz,chan.power)) voice_owner=sid=test.session;
+    else if (tx) { live_summary[0]++;live_summary[1]=NT_DENIED;live_summary[2]=0;live_summary[3]=0;live_summary[4]++; }
     taskEXIT_CRITICAL();
     if (sid && (!eligible(sm) || !p25_lab_live_begin(sid))) {
         deny(sid);
         native_lab_voice_release(sid);
     }
-    if (!tx && rx && sm->view.ch.rx_hz==145500000u) p25_lab_channel_rx(sm->view.ch.rx_hz);
+    if (!tx && rx) p25_lab_channel_rx(chan.rx_hz);
 }
-#endif
 static void restore_channel(radio_sm_t *sm)
 {
     sm->audio_out=sm->green_out=sm->red_out=-1;
@@ -147,21 +165,67 @@ void native_lab_service(radio_sm_t *sm, uint32_t now)
          * must not be compared against a stale task timestamp across setup. */
         taskENTER_CRITICAL(); nt_tick(&test,hal_micros()); taskEXIT_CRITICAL();
         if (nt_cleanup(&test)) {
-#if CONFIG_DEV_TX
-            if (live_enabled) return; /* keep the analog speaker muted between directions */
-            live_restore_pending=false;
-#endif
+            /* The channel's next session follows; the radio core keeps the
+             * speaker and LEDs. A bench session hands the board back. */
+            if (live_enabled) return;
             /* Board is back in FM; force a full retune and fresh speaker/LED decisions. */
             restore_channel(sm);
         }
     }
-#if CONFIG_DEV_TX
-    if (live_restore_pending && !test.owned && !voice_owner) {
-        live_restore_pending=false;
-        restore_channel(sm);
-    }
     live_next(sm);
-#endif
+}
+
+int native_lab_channel(const native_channel *c)
+{
+    taskENTER_CRITICAL();
+    if (c && (updater() || (!live_enabled && (test.owned || test.state==NT_ARMED || pending_start || voice_owner)))) {
+        taskEXIT_CRITICAL();return 0; /* a bench session or the updater has the modem */
+    }
+    if (c && live_enabled && c->rx_hz==chan.rx_hz && c->tx_hz==chan.tx_hz && c->power==chan.power) {
+        taskEXIT_CRITICAL();return 1; /* same channel: the running session stays */
+    }
+    bool was=live_enabled;
+    live_enabled=c!=NULL;
+    live_tx_pending=false;
+    live_rx_pending=live_enabled;
+    if (c) chan=*c;
+    if (was && (voice_owner || test.owned)) { pending_start=0;nt_stop(&test,test.session,NT_USER_STOP); }
+    taskEXIT_CRITICAL();
+    /* Leaving: hand the board back now so the radio core can tune it. The
+     * worker releases its session when it sees the stop. */
+    if (!c && test.owned) nt_cleanup(&test);
+    return 1;
+}
+int native_lab_channel_ptt(bool down)
+{
+    taskENTER_CRITICAL();
+    int ok=live_enabled;
+    if (ok && down) {
+        if (!live_owner()) {
+            live_tx_pending=live_rx_pending=true;
+            if (voice_owner) { pending_start=0;nt_stop(&test,test.session,NT_USER_STOP); }
+        }
+    } else if (ok) {
+        live_tx_pending=false;
+        live_rx_pending=true;
+        if (live_owner()) p25_lab_live_up();
+    }
+    taskEXIT_CRITICAL();
+    return ok;
+}
+void native_lab_channel_state(native_channel_state *s)
+{
+    taskENTER_CRITICAL();
+    s->enabled=live_enabled;
+    s->tx_pending=live_tx_pending;
+    s->transmitting=live_owner() && (test.state==NT_ARMED || test.state==NT_TX || test.state==NT_DRAIN || pending_start);
+    s->keyed=live_owner() && test.keyed;
+    s->receiving=voice_owner && !live_owner() && test.state==NT_RX;
+    s->calls=live_summary[0];
+    s->reason=(uint8_t)live_summary[1];
+    s->blocks=live_summary[2];
+    s->faults=live_summary[4];
+    taskEXIT_CRITICAL();
 }
 int native_lab_request(radio_sm_t *sm, const radio_req_t *r)
 {
@@ -172,22 +236,11 @@ int native_lab_request(radio_sm_t *sm, const radio_req_t *r)
         return 1;
     }
 #if CONFIG_DEV_TX
-    if (live_enabled && r->type==RREQ_PTT) {
-        taskENTER_CRITICAL();
-        if (r->arg==NATIVE_PHYSICAL_PTT_UP) {
-            live_tx_pending=false;
-            if (live_owner()) p25_lab_live_up();
-        } else if (r->arg==NATIVE_PHYSICAL_PTT_DOWN && !live_owner()) {
-            live_tx_pending=live_rx_pending=true;
-            if (voice_owner) { pending_start=0;nt_stop(&test,test.session,NT_USER_STOP); }
-        }
-        taskEXIT_CRITICAL();
-        return 1;
-    }
-    if (live_enabled && r->type!=RREQ_POWER_OFF) return 1;
-    if (r->type==RREQ_POWER_OFF) live_enabled=live_rx_pending=live_tx_pending=false;
+    /* The input task's duplicate physical PTT edges belong to the old bench path. */
     if (r->type==RREQ_PTT && (r->arg==NATIVE_PHYSICAL_PTT_DOWN || r->arg==NATIVE_PHYSICAL_PTT_UP)) return 1;
 #endif
+    /* On the radio core's own channel every request is the radio core's. */
+    if (live_enabled) return 0;
     if (!native_lab_reserved()) return 0;
     taskENTER_CRITICAL();
     last_req_type=r->type;last_req_arg=(uint32_t)r->arg;last_req_ms=hal_millis();
@@ -210,9 +263,7 @@ uint32_t native_lab_voice_start(uint32_t hz,uint32_t ms)
     uint32_t sid=0;
     if (!updater() && board.native_modem && !voice_owner && !pending_start) {
         int armed=ms && nt_arm_voice(&test,hz,ms);
-#if CONFIG_DEV_TX
         if (!ms && live_enabled && !live_tx_pending) armed=nt_arm_live_rx(&test,hz);
-#endif
         if (armed) pending_start=voice_owner=sid=test.session;
     }
     taskEXIT_CRITICAL();
@@ -243,7 +294,6 @@ int native_lab_voice_release(uint32_t sid)
     int released=0;
     taskENTER_CRITICAL();
     if (sid && sid==voice_owner && !test.owned && test.state!=NT_ARMED) {
-#if CONFIG_DEV_TX
         if (live_owner()) {
             live_summary[0]++;
             live_summary[1]=test.reason;
@@ -251,14 +301,12 @@ int native_lab_voice_release(uint32_t sid)
             live_summary[3]=test.stats.pa_keys;
             live_summary[4]=test.stats.faults;
         }
-#endif
         nt_record discard;
         while (nt_pop(&test,sid,&discard)) {}
         voice_owner=0;released=1;
     }
     taskEXIT_CRITICAL();return released;
 }
-#if CONFIG_DEV_TX
 void native_lab_live_summary(uint32_t out[5])
 {
     taskENTER_CRITICAL();
@@ -295,7 +343,6 @@ int native_lab_live_go(uint32_t sid)
     taskEXIT_CRITICAL();
     return ok;
 }
-#endif
 /* Private 0x21 protocol v1. Fixed sizes; no raw register write command.
  * ARM is pure software, START executes only on the radio task. TX requires
  * the explicit 'NP25' guard; it is an opt-in marker, not authentication. */
@@ -346,18 +393,12 @@ size_t native_lab_command(const uint8_t *p, uint16_t n, uint8_t *out, size_t cap
         return 1+count;
     }
     if (p[0]==10 && n==2 && p[1]<=1) {
+        /* Laboratory gate: arm or disarm P25 TX for this boot. RAM only. */
         taskENTER_CRITICAL();
-        if (live_enabled==p[1]) out[0]=DL_ST_OK;
-        else if (!p[1] || (!native_lab_reserved() && !p25_lab_busy())) {
-            live_enabled=live_rx_pending=p[1]!=0;
-            live_tx_pending=false;
-            live_restore_pending=!live_enabled;
-            if (!live_enabled && voice_owner) {
-                pending_start=0;nt_stop(&test,test.session,NT_USER_STOP);
-            }
-            out[0]=DL_ST_OK;
-        } else out[0]=DL_ST_BUSY;
+        lab_armed=p[1]!=0;
+        if (!lab_armed && live_owner()) { pending_start=0;nt_stop(&test,test.session,NT_USER_STOP); }
         taskEXIT_CRITICAL();
+        out[0]=DL_ST_OK;
         return 1;
     }
     if (live_enabled) { out[0]=DL_ST_BUSY;return 1; }

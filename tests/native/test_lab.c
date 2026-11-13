@@ -20,6 +20,12 @@ void mock_exit(void) { assert(depth);depth--; }
 uint32_t hal_micros(void) { return clock_us; }
 uint32_t hal_millis(void) { return clock_us/1000; }
 int p25_lab_busy(void) { return busy; }
+#ifndef NATIVE_CHANNEL_TEST
+/* The worker's side of the radio core's channel, idle in these tests. */
+int p25_lab_live_begin(uint32_t sid) { (void)sid;return 0; }
+int p25_lab_channel_rx(uint32_t hz) { (void)hz;return 0; }
+void p25_lab_live_up(void) { }
+#endif
 bool beep_busy(void) {
     if(replace_arm) { replace_arm=0;assert(!op(5,replace_sid));replacement_sid=arm(NT_RECEIVE);return true; }
     return beeping;
