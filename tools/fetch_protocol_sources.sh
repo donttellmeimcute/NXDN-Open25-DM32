@@ -19,6 +19,16 @@ fetch_pin() {
 }
 fetch_pin op25 https://github.com/boatbod/op25.git 3f44d43eb449bb4753247ce848bb42a403823dea
 fetch_pin MMDVM https://github.com/g4klx/MMDVM.git 046e1df16105cbc33de3da7b7d6a03af402ed81d
+# sdrtrunk: only its P25 decoder (a sparse checkout of one commit)
+if [ ! -d sdrtrunk ]; then
+    git init sdrtrunk
+    git -C sdrtrunk remote add origin https://github.com/DSheirer/sdrtrunk.git
+    git -C sdrtrunk config core.sparseCheckout true
+    printf 'src/main/java/io/github/dsheirer/module/decode/p25/\nLICENSE\n' > sdrtrunk/.git/info/sparse-checkout
+    git -C sdrtrunk fetch --depth 1 origin 9641d2ef59e40ba89b5453e4c4f052b6502124b5
+    git -C sdrtrunk checkout --detach 9641d2ef59e40ba89b5453e4c4f052b6502124b5
+fi
+test "$(git -C sdrtrunk rev-parse HEAD)" = 9641d2ef59e40ba89b5453e4c4f052b6502124b5
 fetch_pdf() {
     task_pdf=$1
     task_url=$2

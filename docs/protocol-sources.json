@@ -126,5 +126,20 @@
     "commit_date": "2026-11-07T20:22:23-05:00",
     "license": "ISC (DSD) with GPL-2.0 files; see COPYRIGHT",
     "use": "independent decoder for host validation only"
+  },
+  {
+    "name": "sdrtrunk",
+    "original_url": "https://github.com/DSheirer/sdrtrunk",
+    "git_url": "https://github.com/DSheirer/sdrtrunk.git",
+    "commit": "9641d2ef59e40ba89b5453e4c4f052b6502124b5",
+    "retrieved_date": "2026-11-13",
+    "local_path": "research/protocol/sdrtrunk",
+    "commit_date": "2026-11-13T07:30:31-05:00",
+    "sparse_paths": [
+      "src/main/java/io/github/dsheirer/module/decode/p25/",
+      "LICENSE"
+    ],
+    "license": "GPL-3.0-or-later (per-file notices, Dennis Sheirer)",
+    "use": "reference for P25 TSBK inbound and outbound message field layouts (ISP, OSP, identifier updates) and P25 Phase 2 MAC structures; nothing copied verbatim, nothing linked"
   }
 ]
