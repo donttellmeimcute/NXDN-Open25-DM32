@@ -32,6 +32,13 @@ def main():
     run([OUT / "test_nxdn_modem"])
     run(["clang", *CFLAGS, "tests/nxdn/test_nxdn_link.c", *LIB, "-lm", "-o", OUT / "test_nxdn_link"])
     run([OUT / "test_nxdn_link"])
+    # The radio channel (integration/radiofoundry/nxdn/radio_nxdn.c) with RadioFoundry's voice bridge and a fake board
+    inc = ["-Iintegration/radiofoundry", "-Iintegration/radiofoundry/nxdn", "-I" + str(RF), "-I" + str(RF.parent / "hal"),
+           "-I" + str(RF / "native_modem"), "-I" + str(RF.parent / "drivers")]
+    run(["clang", *[f for f in CFLAGS if f != "-std=c11"], "-std=gnu11", "-Wno-unused-parameter", "-DCONFIG_NXDN=1",
+         "-DCONFIG_DMR=1", *inc, "tests/nxdn/test_radio_nxdn.c", "integration/radiofoundry/nxdn/radio_nxdn.c", *LIB,
+         RF / "dmr/ambe/ambeVoice.c", RF / "dmr/ambe/ambeFec.c", "-lm", "-o", OUT / "test_radio_nxdn"])
+    run([OUT / "test_radio_nxdn"])
     if not (MMDVM / "NXDNSACCH.cpp").exists():
         print("SKIP MMDVMHost oracle: research/protocol/MMDVMHost missing (tools/build_validators.sh)")
         return 0

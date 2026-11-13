@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* radio_dv.h on the native P25 channel: native_lab.c owns the modem
- * sessions, p25_lab.c's worker runs the codec and frames. */
+/* radio_dv.h: P25 on the native channel (native_lab.c owns the modem
+ * sessions, p25_lab.c's worker runs the codec and frames) and NXDN48
+ * (radio_nxdn.c), by the channel's mode. */
 #include "radio_dv.h"
 #include "config.h"
 #include "hal_radio.h"
@@ -10,40 +11,28 @@
 #if CONFIG_P25_NATIVE
 #include "p25_lab.h"
 #include "native_modem/native_lab.h"
+#endif
+#if CONFIG_NXDN
+#include "radio_nxdn.h"
+#endif
 
-static radio_dv_cfg_t current;
-static bool selected;
-
-bool radio_dv_select(const radio_dv_cfg_t *cfg)
+#if CONFIG_P25_NATIVE
+static bool p25_select(const radio_dv_cfg_t *cfg)
 {
-    if (cfg && selected && !memcmp(cfg, &current, sizeof current)) return true;
-    if (selected) {
-        /* Another channel, or new call settings: the receiver starts over. */
+    if (!cfg) {
         native_lab_channel(NULL);
-        selected = false;
+        return true;
     }
-    if (!cfg) return true;
-    if (cfg->mode != RADIO_MODE_P25) return false;
     p25_lab_channel c = { cfg->nac_rx, cfg->nac_tx, cfg->talkgroup, cfg->unit_id, cfg->hear_all };
     p25_lab_channel_config(&c);
     native_channel n = { cfg->rx_hz, cfg->tx_hz, cfg->power };
-    if (!native_lab_channel(&n)) return false;
-    current = *cfg;
-    selected = true;
-    return true;
+    return native_lab_channel(&n);
 }
 
-bool radio_dv_ptt(bool down)
-{
-    return selected && native_lab_channel_ptt(down);
-}
-
-void radio_dv_status(radio_dv_status_t *o, uint32_t now_ms)
+static void p25_status(radio_dv_status_t *o, uint32_t now_ms)
 {
     p25_lab_rx_status rx;
     native_channel_state ch;
-    memset(o, 0, sizeof *o);
-    if (!selected) return;
     p25_lab_rx_status_get(&rx);
     native_lab_channel_state(&ch);
     bool recent = rx.last_frame_ms && now_ms - rx.last_frame_ms < RADIO_DV_BUSY_MS;
@@ -63,6 +52,70 @@ void radio_dv_status(radio_dv_status_t *o, uint32_t now_ms)
     o->tx_blocks = ch.blocks;
 }
 #endif
+
+static radio_dv_cfg_t current;
+static bool selected;
+
+bool radio_dv_select(const radio_dv_cfg_t *cfg)
+{
+    if (cfg && selected && !memcmp(cfg, &current, sizeof current)) return true;
+    if (selected) {
+        /* Another channel, or new call settings: the receiver starts over. */
+#if CONFIG_P25_NATIVE
+        if (current.mode == RADIO_MODE_P25) p25_select(NULL);
+#endif
+#if CONFIG_NXDN
+        if (current.mode == RADIO_MODE_NXDN) radio_nxdn_select(NULL);
+#endif
+        selected = false;
+    }
+    if (!cfg) return true;
+    bool ok = false;
+#if CONFIG_P25_NATIVE
+    if (cfg->mode == RADIO_MODE_P25) ok = p25_select(cfg);
+#endif
+#if CONFIG_NXDN
+    if (cfg->mode == RADIO_MODE_NXDN) ok = radio_nxdn_select(cfg);
+#endif
+    if (!ok) return false;
+    current = *cfg;
+    selected = true;
+    return true;
+}
+
+bool radio_dv_ptt(bool down)
+{
+    if (!selected) return false;
+#if CONFIG_P25_NATIVE
+    if (current.mode == RADIO_MODE_P25) return native_lab_channel_ptt(down);
+#endif
+#if CONFIG_NXDN
+    if (current.mode == RADIO_MODE_NXDN) return radio_nxdn_ptt(down);
+#endif
+    (void)down;
+    return false;
+}
+
+void radio_dv_status(radio_dv_status_t *o, uint32_t now_ms)
+{
+    memset(o, 0, sizeof *o);
+    if (!selected) return;
+#if CONFIG_P25_NATIVE
+    if (current.mode == RADIO_MODE_P25) p25_status(o, now_ms);
+#endif
+#if CONFIG_NXDN
+    if (current.mode == RADIO_MODE_NXDN) radio_nxdn_status(o, now_ms);
+#endif
+    (void)now_ms;
+}
+
+void radio_dv_service(uint32_t now_ms)
+{
+#if CONFIG_NXDN
+    if (selected && current.mode == RADIO_MODE_NXDN) radio_nxdn_service(now_ms);
+#endif
+    (void)now_ms;
+}
 
 uint8_t radio_dv_tx_deny(uint8_t nt_reason)
 {
