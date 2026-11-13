@@ -1,0 +1,534 @@
+{
+  "date": "2026-11-13",
+  "tool": "tools/nxdn_validate.py",
+  "decoder": {
+    "name": "dsd-fme",
+    "commit": "34753963b8855c6c07b79250cb4de4f2c38a4613",
+    "mbelib": "9a04ed5c78176a9965f3d43f7aa1b1f5330e771f"
+  },
+  "waveform_source": {
+    "name": "MMDVM NXDNTX.cpp transmit filters (RRC 0.2, L = 10, and NXDN_SINC_FILTER)",
+    "commit": "046e1df16105cbc33de3da7b7d6a03af402ed81d"
+  },
+  "chains": {
+    "transmit": "tests/validation/nxdn_tx_air.c: AMBE+2 parameters -> AMBE FEC -> src/nxdn call frames -> nxdn_mod at 8 kHz -> 3.6 kHz interpolation to 48 kHz",
+    "receive": "tests/validation/nxdn_rx_air.c: MMDVM-shaped deviation -> tests/nxdn/nxdn_channel.c FM channel (100 ms idle noise first) -> nxdn_demod -> nxdn_rx -> AMBE FEC"
+  },
+  "notes": [
+    "nrz: each symbol's level held for its whole length, the bit-exact view of the stream, as tools/p25_validate.py",
+    "dsd-fme confirms sync over two frame sync words, then settles its levels: it joins one to three frames into a transmission; the nrz run sends three header frames so a header can be shown",
+    "on shaped waveforms (ours and MMDVM's alike) dsd-fme misreads the header frames' LICH as a Japanese DCR code; with held levels it decodes the same frames as VCALL headers. Our receiver and MMDVMHost's classes read them",
+    "the parameters are pseudo-random AMBE+2 frames: the check is bit equality, not speech"
+  ],
+  "runs": [
+    {
+      "transmitted": {
+        "ran": 12,
+        "source": 4001,
+        "group": 200
+      },
+      "dsd_fme_nrz": {
+        "waveform": "nrz",
+        "sent": {
+          "tx_frames": 79,
+          "header_frames": 3,
+          "voice_frames": 75,
+          "ambe_frames": 300,
+          "samples_8k": 50800
+        },
+        "heard": {
+          "frames": 78,
+          "ran": [
+            12
+          ],
+          "vcall": [
+            [
+              4001,
+              200
+            ]
+          ],
+          "tx_rel": true,
+          "header_vcall_facch1": true,
+          "ambe_frames": 300,
+          "ambe_with_corrections": 0,
+          "ambe_first_frame": 0,
+          "ambe_matching_ours": 300,
+          "audio_errors": 0,
+          "header_errors": 0,
+          "joined_after_frames": 3
+        }
+      },
+      "dsd_fme_ours": {
+        "waveform": "ours",
+        "sent": {
+          "tx_frames": 77,
+          "header_frames": 1,
+          "voice_frames": 75,
+          "ambe_frames": 300,
+          "samples_8k": 49520
+        },
+        "heard": {
+          "frames": 74,
+          "ran": [
+            12
+          ],
+          "vcall": [
+            [
+              4001,
+              200
+            ]
+          ],
+          "tx_rel": true,
+          "header_vcall_facch1": false,
+          "ambe_frames": 292,
+          "ambe_with_corrections": 0,
+          "ambe_first_frame": 8,
+          "ambe_matching_ours": 292,
+          "audio_errors": 0,
+          "header_errors": 0,
+          "joined_after_frames": 3
+        }
+      },
+      "mmdvm_waveform_to_our_receiver": {
+        "sent": {
+          "tx_frames": 77,
+          "header_frames": 1,
+          "voice_frames": 75,
+          "ambe_frames": 300,
+          "samples_8k": 49520
+        },
+        "heard": {
+          "frames": 78,
+          "calls": 1,
+          "releases": 1,
+          "late_entries": 0,
+          "ran": 12,
+          "source": 4001,
+          "destination": 200,
+          "group_call": true,
+          "encrypted": false,
+          "bad_lich": 1,
+          "bad_sacch": 0,
+          "false_syncs": 0,
+          "sync_losses": 0,
+          "slots_played": 300,
+          "ambe_first_frame": 0,
+          "ambe_matching_ours": 300,
+          "cnr_db": 300.0
+        }
+      },
+      "match": true,
+      "args": []
+    },
+    {
+      "transmitted": {
+        "ran": 12,
+        "source": 4001,
+        "group": 200
+      },
+      "dsd_fme_nrz": {
+        "waveform": "nrz",
+        "sent": {
+          "tx_frames": 79,
+          "header_frames": 3,
+          "voice_frames": 75,
+          "ambe_frames": 300,
+          "samples_8k": 50800
+        },
+        "heard": {
+          "frames": 78,
+          "ran": [
+            12
+          ],
+          "vcall": [
+            [
+              4001,
+              200
+            ]
+          ],
+          "tx_rel": true,
+          "header_vcall_facch1": true,
+          "ambe_frames": 300,
+          "ambe_with_corrections": 0,
+          "ambe_first_frame": 0,
+          "ambe_matching_ours": 300,
+          "audio_errors": 0,
+          "header_errors": 0,
+          "joined_after_frames": 3
+        }
+      },
+      "dsd_fme_ours": {
+        "waveform": "ours",
+        "sent": {
+          "tx_frames": 77,
+          "header_frames": 1,
+          "voice_frames": 75,
+          "ambe_frames": 300,
+          "samples_8k": 49520
+        },
+        "heard": {
+          "frames": 74,
+          "ran": [
+            12
+          ],
+          "vcall": [
+            [
+              4001,
+              200
+            ]
+          ],
+          "tx_rel": true,
+          "header_vcall_facch1": false,
+          "ambe_frames": 292,
+          "ambe_with_corrections": 0,
+          "ambe_first_frame": 8,
+          "ambe_matching_ours": 292,
+          "audio_errors": 0,
+          "header_errors": 0,
+          "joined_after_frames": 3
+        }
+      },
+      "mmdvm_waveform_to_our_receiver": {
+        "sent": {
+          "tx_frames": 77,
+          "header_frames": 1,
+          "voice_frames": 75,
+          "ambe_frames": 300,
+          "samples_8k": 49520
+        },
+        "heard": {
+          "frames": 78,
+          "calls": 1,
+          "releases": 1,
+          "late_entries": 0,
+          "ran": 12,
+          "source": 4001,
+          "destination": 200,
+          "group_call": true,
+          "encrypted": false,
+          "bad_lich": 1,
+          "bad_sacch": 0,
+          "false_syncs": 0,
+          "sync_losses": 0,
+          "slots_played": 300,
+          "ambe_first_frame": 0,
+          "ambe_matching_ours": 300,
+          "cnr_db": 12.0
+        }
+      },
+      "match": true,
+      "args": [
+        "--cnr-db",
+        "12"
+      ]
+    },
+    {
+      "transmitted": {
+        "ran": 12,
+        "source": 4001,
+        "group": 200
+      },
+      "dsd_fme_nrz": {
+        "waveform": "nrz",
+        "sent": {
+          "tx_frames": 79,
+          "header_frames": 3,
+          "voice_frames": 75,
+          "ambe_frames": 300,
+          "samples_8k": 50800
+        },
+        "heard": {
+          "frames": 78,
+          "ran": [
+            12
+          ],
+          "vcall": [
+            [
+              4001,
+              200
+            ]
+          ],
+          "tx_rel": true,
+          "header_vcall_facch1": true,
+          "ambe_frames": 300,
+          "ambe_with_corrections": 0,
+          "ambe_first_frame": 0,
+          "ambe_matching_ours": 300,
+          "audio_errors": 0,
+          "header_errors": 0,
+          "joined_after_frames": 3
+        }
+      },
+      "dsd_fme_ours": {
+        "waveform": "ours",
+        "sent": {
+          "tx_frames": 77,
+          "header_frames": 1,
+          "voice_frames": 75,
+          "ambe_frames": 300,
+          "samples_8k": 49520
+        },
+        "heard": {
+          "frames": 74,
+          "ran": [
+            12
+          ],
+          "vcall": [
+            [
+              4001,
+              200
+            ]
+          ],
+          "tx_rel": true,
+          "header_vcall_facch1": false,
+          "ambe_frames": 292,
+          "ambe_with_corrections": 0,
+          "ambe_first_frame": 8,
+          "ambe_matching_ours": 292,
+          "audio_errors": 0,
+          "header_errors": 0,
+          "joined_after_frames": 3
+        }
+      },
+      "mmdvm_waveform_to_our_receiver": {
+        "sent": {
+          "tx_frames": 77,
+          "header_frames": 1,
+          "voice_frames": 75,
+          "ambe_frames": 300,
+          "samples_8k": 49520
+        },
+        "heard": {
+          "frames": 78,
+          "calls": 1,
+          "releases": 1,
+          "late_entries": 0,
+          "ran": 12,
+          "source": 4001,
+          "destination": 200,
+          "group_call": true,
+          "encrypted": false,
+          "bad_lich": 1,
+          "bad_sacch": 0,
+          "false_syncs": 0,
+          "sync_losses": 0,
+          "slots_played": 300,
+          "ambe_first_frame": 0,
+          "ambe_matching_ours": 299,
+          "cnr_db": 10.0
+        }
+      },
+      "match": true,
+      "args": [
+        "--cnr-db",
+        "10"
+      ]
+    },
+    {
+      "transmitted": {
+        "ran": 12,
+        "source": 4001,
+        "group": 200
+      },
+      "dsd_fme_nrz": {
+        "waveform": "nrz",
+        "sent": {
+          "tx_frames": 79,
+          "header_frames": 3,
+          "voice_frames": 75,
+          "ambe_frames": 300,
+          "samples_8k": 50800
+        },
+        "heard": {
+          "frames": 78,
+          "ran": [
+            12
+          ],
+          "vcall": [
+            [
+              4001,
+              200
+            ]
+          ],
+          "tx_rel": true,
+          "header_vcall_facch1": true,
+          "ambe_frames": 300,
+          "ambe_with_corrections": 0,
+          "ambe_first_frame": 0,
+          "ambe_matching_ours": 300,
+          "audio_errors": 0,
+          "header_errors": 0,
+          "joined_after_frames": 3
+        }
+      },
+      "dsd_fme_ours": {
+        "waveform": "ours",
+        "sent": {
+          "tx_frames": 77,
+          "header_frames": 1,
+          "voice_frames": 75,
+          "ambe_frames": 300,
+          "samples_8k": 49520
+        },
+        "heard": {
+          "frames": 74,
+          "ran": [
+            12
+          ],
+          "vcall": [
+            [
+              4001,
+              200
+            ]
+          ],
+          "tx_rel": true,
+          "header_vcall_facch1": false,
+          "ambe_frames": 292,
+          "ambe_with_corrections": 0,
+          "ambe_first_frame": 8,
+          "ambe_matching_ours": 292,
+          "audio_errors": 0,
+          "header_errors": 0,
+          "joined_after_frames": 3
+        }
+      },
+      "mmdvm_waveform_to_our_receiver": {
+        "sent": {
+          "tx_frames": 77,
+          "header_frames": 1,
+          "voice_frames": 75,
+          "ambe_frames": 300,
+          "samples_8k": 49520
+        },
+        "heard": {
+          "frames": 78,
+          "calls": 1,
+          "releases": 1,
+          "late_entries": 0,
+          "ran": 12,
+          "source": 4001,
+          "destination": 200,
+          "group_call": true,
+          "encrypted": false,
+          "bad_lich": 2,
+          "bad_sacch": 0,
+          "false_syncs": 0,
+          "sync_losses": 0,
+          "slots_played": 300,
+          "ambe_first_frame": 0,
+          "ambe_matching_ours": 287,
+          "cnr_db": 8.0
+        }
+      },
+      "match": true,
+      "args": [
+        "--cnr-db",
+        "8"
+      ]
+    },
+    {
+      "transmitted": {
+        "ran": 12,
+        "source": 4001,
+        "group": 200
+      },
+      "dsd_fme_nrz": {
+        "waveform": "nrz",
+        "sent": {
+          "tx_frames": 79,
+          "header_frames": 3,
+          "voice_frames": 75,
+          "ambe_frames": 300,
+          "samples_8k": 50800
+        },
+        "heard": {
+          "frames": 78,
+          "ran": [
+            12
+          ],
+          "vcall": [
+            [
+              4001,
+              200
+            ]
+          ],
+          "tx_rel": true,
+          "header_vcall_facch1": true,
+          "ambe_frames": 300,
+          "ambe_with_corrections": 0,
+          "ambe_first_frame": 0,
+          "ambe_matching_ours": 300,
+          "audio_errors": 0,
+          "header_errors": 0,
+          "joined_after_frames": 3
+        }
+      },
+      "dsd_fme_ours": {
+        "waveform": "ours",
+        "sent": {
+          "tx_frames": 77,
+          "header_frames": 1,
+          "voice_frames": 75,
+          "ambe_frames": 300,
+          "samples_8k": 49520
+        },
+        "heard": {
+          "frames": 74,
+          "ran": [
+            12
+          ],
+          "vcall": [
+            [
+              4001,
+              200
+            ]
+          ],
+          "tx_rel": true,
+          "header_vcall_facch1": false,
+          "ambe_frames": 292,
+          "ambe_with_corrections": 0,
+          "ambe_first_frame": 8,
+          "ambe_matching_ours": 292,
+          "audio_errors": 0,
+          "header_errors": 0,
+          "joined_after_frames": 3
+        }
+      },
+      "mmdvm_waveform_to_our_receiver": {
+        "sent": {
+          "tx_frames": 77,
+          "header_frames": 1,
+          "voice_frames": 75,
+          "ambe_frames": 300,
+          "samples_8k": 49520
+        },
+        "heard": {
+          "frames": 78,
+          "calls": 1,
+          "releases": 1,
+          "late_entries": 0,
+          "ran": 12,
+          "source": 4001,
+          "destination": 200,
+          "group_call": true,
+          "encrypted": false,
+          "bad_lich": 1,
+          "bad_sacch": 0,
+          "false_syncs": 0,
+          "sync_losses": 0,
+          "slots_played": 300,
+          "ambe_first_frame": 0,
+          "ambe_matching_ours": 300,
+          "cnr_db": 14.0
+        }
+      },
+      "match": true,
+      "args": [
+        "--offset-hz",
+        "500",
+        "--cnr-db",
+        "14"
+      ]
+    }
+  ]
+}

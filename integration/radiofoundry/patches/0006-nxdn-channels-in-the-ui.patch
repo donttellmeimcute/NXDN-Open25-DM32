@@ -1,0 +1,267 @@
+--- a/core/ui/ui_menus.c
++++ b/core/ui/ui_menus.c
+@@ -2007,10 +2007,10 @@
+ 	sbuf_t b;
+ 	sb_init(&b, it->value, sizeof it->value);
+ #if CONFIG_CHANNEL_EDIT
+-	if (editing && (r == CE_RX || r == CE_TX || r == CE_ID || r == CE_TG)) {
++	if (editing && (r == CE_RX || r == CE_TX || r == CE_ID || r == CE_TG || r == CE_NAC)) {
+ 		// What has been typed so far: "446.07_", "3101_"
+ 		for (uint8_t k = 0; k < ced_len; k++) {
+-			if (r != CE_ID && r != CE_TG && k == UI_ENTRY_MHZ)
++			if (r != CE_ID && r != CE_TG && r != CE_NAC && k == UI_ENTRY_MHZ)
+ 				sb_chr(&b, '.');
+ 			sb_chr(&b, ced_digits[k]);
+ 		}
+@@ -2030,6 +2030,16 @@
+ 			ch->mode == RADIO_MODE_NXDN ? "NXDN" : ch->mode == RADIO_MODE_P25_TRUNK ? "P25 trunk" : "FM");
+ 		break;
+ 	case CE_NAC: {
++		if (ch->mode == RADIO_MODE_NXDN) {
++			// The RAN, typed 0-63 (RX and TX alike; RX 0 hears every RAN). Separate values from the editor or CSV
++			sb_str(&b, "RAN ");
++			sb_u32(&b, ch->nac_tx, 1);
++			if (ch->nac_rx == 0 && ch->nac_tx != 0)
++				sb_str(&b, TR(", RX any"));
++			else if (ch->nac_rx != ch->nac_tx)
++				sb_str(&b, TR(", RX other"));
++			break;
++		}
+ 		// The TX NAC in hex, and RX: the same one or every NAC (OK switches them; the values from the editor or CSV)
+ 		static const char hex[] = "0123456789ABCDEF";
+ 		for (int s = 8; s >= 0; s -= 4)
+@@ -2301,6 +2311,15 @@
+ 	case CE_TG:
+ 		if (v > 65535) {
+ 			ui_toast(TR("Talkgroups go up to 65535"));
++			break;
++		}
++		ced_val = v;
++		ced_digits[ced_len++] = d;
++		ced_digits[ced_len] = 0;
++		break;
++	case CE_NAC:		// an NXDN channel's RAN
++		if (v > 63) {
++			ui_toast(TR("RAN goes 0 to 63"));
+ 			break;
+ 		}
+ 		ced_val = v;
+@@ -2363,6 +2382,10 @@
+ 		if (ced_len > 0 && ced_val >= 1)
+ 			c->talkgroup = (uint16_t)ced_val;
+ 		break;
++	case CE_NAC:
++		if (ced_len > 0)
++			c->nac_rx = c->nac_tx = (uint16_t)ced_val;	// an NXDN channel's RAN
++		break;
+ 	case CE_POWER:
+ 		c->power = ced_val >= board.power_count ? CODEPLUG_POWER_DEFAULT : (uint8_t)ced_val;
+ 		break;
+@@ -2408,7 +2431,7 @@
+ 	int dir = ev->action == ACT_NAV_UP ? 1 : ev->action == ACT_NAV_DOWN ? -1 :
+ 		ev->action == ACT_ENC_STEP ? (ev->value > 0 ? 1 : -1) : 0;
+ 	if (dir != 0 && ev->gesture != GESTURE_UP) {
+-		if (ced_edit != CE_RX && ced_edit != CE_TX && ced_edit != CE_ID && ced_edit != CE_TG)
++		if (ced_edit != CE_RX && ced_edit != CE_TX && ced_edit != CE_ID && ced_edit != CE_TG && ced_edit != CE_NAC)
+ 			ced_spin(dir);	// typed fields ignore the knob, so the focus can't move under them either
+ 		ui_dirty();
+ 		return true;
+@@ -2419,7 +2442,7 @@
+ 		return true;
+ 	}
+ 	if (ev->action == ACT_BACK && ev->gesture == GESTURE_PRESS) {
+-		if ((ced_edit == CE_RX || ced_edit == CE_TX || ced_edit == CE_ID || ced_edit == CE_TG ||
++		if ((ced_edit == CE_RX || ced_edit == CE_TX || ced_edit == CE_ID || ced_edit == CE_TG || ced_edit == CE_NAC ||
+ 		     ced_edit == CE_RX_TONE || ced_edit == CE_TX_TONE) && ced_len > 0) {
+ 			ced_digits[--ced_len] = 0;	// takes the last digit back
+ 			ced_val /= 10;
+@@ -2464,9 +2487,24 @@
+ 	switch (r) {
+ 	case CE_NAME: ui_text_open(c->name, CODEPLUG_NAME_LEN); break;
+ 	case CE_MODE:
+-		// FM, DMR, then P25 where the build has it (NXDN and trunking come from the editor or CSV)
+-		c->mode = c->mode == RADIO_MODE_FM ? RADIO_MODE_DMR :
+-			(c->mode == RADIO_MODE_DMR && CONFIG_P25 && CONFIG_P25_NATIVE) ? RADIO_MODE_P25 : RADIO_MODE_FM;
++		// FM, DMR, then P25 and NXDN where the build has them (trunking comes from the editor or CSV)
++		if (c->mode == RADIO_MODE_FM)
++			c->mode = RADIO_MODE_DMR;
++		else if (c->mode == RADIO_MODE_DMR && CONFIG_P25 && CONFIG_P25_NATIVE)
++			c->mode = RADIO_MODE_P25;
++		else if ((c->mode == RADIO_MODE_DMR || c->mode == RADIO_MODE_P25) && CONFIG_NXDN)
++			c->mode = RADIO_MODE_NXDN;
++		else
++			c->mode = RADIO_MODE_FM;
++		if (c->mode == RADIO_MODE_NXDN) {
++			if (c->nac_tx > 63)
++				c->nac_tx = 1;		// a NAC left from P25: RAN 1
++			if (c->nac_rx > 63)
++				c->nac_rx = c->nac_tx;
++			if (c->talkgroup == 0)
++				c->talkgroup = 1;
++			c->bw = RADIO_BW_12K5;
++		}
+ 		if (c->mode == RADIO_MODE_P25) {
+ 			if (c->nac_tx == 0 || c->nac_tx >= CODEPLUG_NAC_ANY)
+ 				c->nac_tx = CODEPLUG_NAC_DEFAULT;
+@@ -2479,7 +2517,14 @@
+ 		ced_build();
+ 		break;
+ 	case CE_NAC:
+-		c->nac_rx = c->nac_rx == CODEPLUG_NAC_ANY ? c->nac_tx : CODEPLUG_NAC_ANY;
++		if (c->mode != RADIO_MODE_NXDN) {
++			c->nac_rx = c->nac_rx == CODEPLUG_NAC_ANY ? c->nac_tx : CODEPLUG_NAC_ANY;
++			break;
++		}
++		ced_edit = r;		// an NXDN channel's RAN is typed, as the rows below
++		ced_len = 0;
++		ced_val = 0;
++		ced_digits[0] = 0;
+ 		break;
+ 	case CE_TG:
+ 	case CE_RX:
+--- a/core/ui/ui_screens.c
++++ b/core/ui/ui_screens.c
+@@ -478,7 +478,8 @@
+ 	const char *mw = mode_word(v);
+ #if CONFIG_DUAL_WATCH
+ 	if (s->dual.on)
+-		mw = s->dual.pane[s->dual.sel].mode == RADIO_MODE_DMR ? "DMR" : s->dual.pane[s->dual.sel].mode == RADIO_MODE_P25 ? "P25" : "FM";
++		mw = s->dual.pane[s->dual.sel].mode == RADIO_MODE_DMR ? "DMR" : s->dual.pane[s->dual.sel].mode == RADIO_MODE_P25 ? "P25" :
++			s->dual.pane[s->dual.sel].mode == RADIO_MODE_NXDN ? "NXDN" : "FM";
+ #endif
+ 	int lx = gfx_text(f, x, ty, mw, sfg);
+ #if CONFIG_DUAL_WATCH
+@@ -1670,6 +1671,9 @@
+ 			} else if (v->ch.mode != RADIO_MODE_NXDN && v->dv.nac != v->ch.nac_rx && v->ch.nac_rx != CODEPLUG_NAC_ANY) {
+ 				sb_str(&b, TR("Busy: NAC "));
+ 				sb_nac(&b, v->dv.nac);
++			} else if (v->ch.mode == RADIO_MODE_NXDN && v->ch.nac_rx != 0 && v->dv.nac != v->ch.nac_rx) {
++				sb_str(&b, TR("Busy: RAN "));
++				sb_u32(&b, v->dv.nac, 1);
+ 			} else {
+ 				sb_dv_call(&b, v->dv.talkgroup, v->dv.source);
+ 			}
+--- a/core/ui/lang/es.po
++++ b/core/ui/lang/es.po
+@@ -1729,6 +1729,10 @@
+ msgstr "Grupos hasta 65535"
+ 
+ #: core/ui/ui_menus.c
++msgid "RAN goes 0 to 63"
++msgstr "RAN de 0 a 63"
++
++#: core/ui/ui_menus.c
+ msgid "DCS codes use digits 0-7"
+ msgstr "Códigos DCS: dígitos 0-7"
+ 
+@@ -3453,6 +3457,10 @@
+ msgstr "Ocupado: NAC "
+ 
+ #: core/ui/ui_screens.c
++msgid "Busy: RAN "
++msgstr "Ocupado: RAN "
++
++#: core/ui/ui_screens.c
+ msgid "Last ID "
+ msgstr "Último ID "
+ 
+--- a/core/ui/lang/it.po
++++ b/core/ui/lang/it.po
+@@ -1729,6 +1729,10 @@
+ msgstr "Gruppi fino a 65535"
+ 
+ #: core/ui/ui_menus.c
++msgid "RAN goes 0 to 63"
++msgstr "RAN da 0 a 63"
++
++#: core/ui/ui_menus.c
+ msgid "DCS codes use digits 0-7"
+ msgstr "Codici DCS: cifre 0-7"
+ 
+@@ -3453,6 +3457,10 @@
+ msgstr "Occupato: NAC "
+ 
+ #: core/ui/ui_screens.c
++msgid "Busy: RAN "
++msgstr "Occupato: RAN "
++
++#: core/ui/ui_screens.c
+ msgid "Last ID "
+ msgstr "Ultimo ID "
+ 
+--- a/tests/host/sim/ui_sim.c
++++ b/tests/host/sim/ui_sim.c
+@@ -2330,17 +2330,19 @@
+ 		advance(1500);
+ 		return true;
+ 	}
+-	if (strcmp(t, "p25") == 0 && arg != NULL) {	// a P25 channel: idle, rx (a call plays), tx, enc (encrypted call heard)
+-		view.ch.mode = RADIO_MODE_P25;
+-		strcpy(view.ch.name, "P25 Ops");
+-		view.ch.rx_hz = view.ch.tx_hz = 155475000;
+-		view.ch.nac_tx = 0x293;
+-		view.ch.nac_rx = CODEPLUG_NAC_ANY;
+-		view.ch.talkgroup = 100;
+-		view.ch.dmr_id = 1234567;
++	// a P25 or NXDN channel: idle, rx (a call plays), tx, enc (encrypted call heard), other (another NAC / RAN heard)
++	if ((strcmp(t, "p25") == 0 || strcmp(t, "nxdn") == 0) && arg != NULL) {
++		bool nxdn = t[0] == 'n';
++		view.ch.mode = nxdn ? RADIO_MODE_NXDN : RADIO_MODE_P25;
++		strcpy(view.ch.name, nxdn ? "NXDN Ops" : "P25 Ops");
++		view.ch.rx_hz = view.ch.tx_hz = nxdn ? 451125000 : 155475000;
++		view.ch.nac_tx = nxdn ? 12 : 0x293;
++		view.ch.nac_rx = nxdn ? 12 : CODEPLUG_NAC_ANY;
++		view.ch.talkgroup = nxdn ? 200 : 100;
++		view.ch.dmr_id = nxdn ? 4001 : 1234567;
+ 		view.dv.active = true;
+-		view.dv.last_talkgroup = 100;
+-		view.dv.last_source = 7654321;
++		view.dv.last_talkgroup = view.ch.talkgroup;
++		view.dv.last_source = nxdn ? 3210 : 7654321;
+ 		view.dv.last_ms = now_ms > 60000 ? now_ms - 60000 : 1;
+ 		view.state = RS_IDLE;
+ 		view.dv.state = RDV_IDLE;
+@@ -2348,20 +2350,26 @@
+ 			view.state = RS_RX;
+ 			view.rssi_dbm = -82;
+ 			view.dv.state = RDV_RX;
+-			view.dv.talkgroup = 100;
+-			view.dv.source = 7654321;
++			view.dv.talkgroup = view.ch.talkgroup;
++			view.dv.source = view.dv.last_source;
++			view.dv.nac = view.ch.nac_tx;
+ 		} else if (strcmp(arg, "tx") == 0) {
+ 			view.state = RS_TX;
+ 			view.tx_elapsed_ms = 12000;
+ 			view.tot_s = 180;
+ 			view.dv.state = RDV_TX;
+-			view.dv.talkgroup = 100;
+-			view.dv.source = 1234567;
++			view.dv.talkgroup = view.ch.talkgroup;
++			view.dv.source = view.ch.dmr_id;
+ 		} else if (strcmp(arg, "enc") == 0) {
+ 			view.dv.state = RDV_RX_OTHER;
+ 			view.dv.encrypted = true;
+ 			view.dv.talkgroup = 200;
+ 			view.dv.source = 5550001;
++		} else if (strcmp(arg, "other") == 0) {
++			view.dv.state = RDV_RX_OTHER;
++			view.dv.nac = nxdn ? 5 : 0x5A5;
++			view.dv.talkgroup = 300;
++			view.dv.source = 77;
+ 		}
+ 		changed();
+ 		advance(500);
+--- a/tests/host/uiSim.c
++++ b/tests/host/uiSim.c
+@@ -43,6 +43,10 @@
+ 	{ "rx_p25", "p25:rx" },
+ 	{ "tx_p25", "p25:tx" },
+ 	{ "home_p25_encrypted", "p25:enc" },
++	{ "home_nxdn", "nxdn:idle" },
++	{ "rx_nxdn", "nxdn:rx" },
++	{ "tx_nxdn", "nxdn:tx" },
++	{ "home_nxdn_busy", "nxdn:other" },
+ 	{ "home_temporary", "down quick 1 2 up back" },
+ 	{ "home_vfo", "ok 4 up ok" },
+ 	{ "home_vfo_entry", "ok 4 up ok 4 4 6" },

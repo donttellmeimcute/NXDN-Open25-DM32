@@ -1,5 +1,68 @@
 # DM-32 conventional P25 progress
 
+## 2026-11-13 Phase 2: NXDN48 conventional channels
+
+**Air interface and frame layer.** NXDN48 confirmed against MMDVM and MMDVMHost: 2400 symbols/s 4FSK at
++-1050/+-350 Hz, 80 ms frames of FSW 20 + LICH 16 + SACCH 60 + 4 x 72 voice bits. `src/nxdn` has the LICH,
+SACCH, FACCH1 (K=5 convolutional code, Viterbi, puncturing, interleaving, CRC6/12/15), the PN9 scrambler, VCALL and
+TX_REL, voice slots in DMR's AMBE+2 air form, and the call layer: RAN, group and private filters, encrypted calls
+muted (never decrypted), late entry from the SACCH superframe (from any four parts), TX_REL, a sync flywheel, and a
+tentative sync that noise can't hold. Against MMDVMHost's own classes: bit-exact scrambler, all 128 LICH values,
+2000 SACCH and 2000 FACCH1 frames with injected errors (ours never decodes fewer), voice coding and a whole call.
+
+**Modem and route.** A software modem at 8 kHz (integer only): RRC 0.2 x sin(x)/x transmit filter, RRC x x/sin(x)
+matched filter at interpolated instants, Gardner timing on zero crossings only, decision-directed levels, optional
+inverses of a high-pass and of a de-emphasis in the audio path, and acquisition again while the symbols don't fit
+(the radio's receive audio has no squelch edge). A host FM channel model (noise, offset, deviation error,
+high-pass, de-emphasis, clipping, idle noise) measured both transmit routes (`docs/nxdn-modem.md`): software
+modulation at 8 kHz decodes every frame from 10 dB C/N up and puts the adjacent channel 43.7 dB down; the native
+4800-symbol/s mode with each symbol twice keeps a 0.3 % BER floor and -34.2 dB. **Chosen: software modulation into
+the FM modulator through the prompt FIFO, software demodulation of the HR_C7000's RX RAM copy of the received
+audio.** Found and fixed on the way: a false sync in noise that cost one call in 40 its header; MMDVM's +3 +3 -3 -3
+lead-in, on which plain Gardner has no timing (the gate fixes it); de-emphasis (the DM-32's FD6818 keeps it on in
+FM) and any high-pass break reception uncompensated and cost nothing compensated.
+
+**Independent validation** (`docs/validation.md`, `results/nxdn-validation.json`): dsd-fme decodes our transmit
+chain: RAN, VCALL, TX_REL, and 300/300 AMBE+2 frames equal to ours with held levels (header included), 292/300 on
+our modulator's waveform (dsd-fme joins two frames in); MMDVM's transmit shaping received by our chain: 300/300 bit
+exact without noise and at 12 dB, 299/300 at 10 dB.
+
+**On the radio.** `CONFIG_NXDN` (needs DMR). NXDN is a channel mode beside FM, DMR and P25: codeplug, editor and
+CSV fields (from Phase 1's records: RAN, group, unit ID), the radio's channel editor (mode cycle, typed RAN), home
+screen (group, caller, busy by RAN, encrypted), the same TX rules (band, calibrated power, TOT ending with TX_REL,
+busy lockout by RAN, a missing unit ID or one above 65519 refused, unkey on release) and scan stops on our RAN. `radio_dv.c`
+dispatches by mode; `radio_nxdn.c` runs the link in the radio tick with RadioFoundry's DMR voice bridge (vocoder, PCM,
+AMBE FEC). The DM-32 board implements the flat FM paths in `hal_audio_tap` (`dm32_nxdn.inc`): RX from the RX RAM copy
+with the FD6818 de-emphasis and the FM band-pass off, TX through the prompt FIFO with the microphone switched out of
+the modulator but still to the CPU. Details: `docs/nxdn-channels.md`.
+
+**Measured** (linker region totals, each preset with and without NXDN; `results/phase2-nxdn.json`):
+
+| Preset | Flash | NXDN flash | Main RAM | NXDN RAM | RAM free |
+|---|---:|---:|---:|---:|---:|
+| native | 459,112 | +13,804 | 193,120 | +2,736 | 18,336 |
+| lab (`--disable-native`) | 447,184 | +14,932 | 187,176 | +2,768 | 24,280 |
+| P25 off | 408,652 | +14,932 | 163,312 | +2,768 | 48,144 |
+| native lean | 457,352 | +13,804 | 190,704 | +2,736 | 20,752 |
+| TX bench (lab gate) | 453,300 | +13,804 | 198,768 | +2,736 | 12,688 |
+
+The transmit ring was cut from 4 KB to 1 KB by modulating symbol by symbol. Every preset builds with zero warnings
+with NXDN on and off; the stack check passes (the NXDN path in the radio tick adds about 0.8 KB below the radio
+task's deepest path; least margin unchanged, idle task 136 bytes). Phase 1's TX bench flash figure (472,472) does not
+reproduce: today's rebuild of that preset with NXDN off links 439,496 bytes with the same RAM.
+
+Tests: `tools/test_nxdn.py` (calls, modem, link at the radio's pace, the radio channel with RadioFoundry's
+`ambeVoice`, MMDVMHost oracle, FEC comparison), `tests/test_nxdn_validation.py`, the RadioFoundry host suite
+(`radioCoreTestNXDN` 2,172 checks, `radioCoreTestP25` 2,204, UI flows, layout check 4,667 screens), 556 site tests,
+108 Python tests.
+
+**Not verified in hardware:** all of it. In particular: the prompt FIFO reaching the modulator with the FM voice
+source on TX RAM, the microphone off the air but on the CPU, the deviation scale (borrowed from the APRS measurement
+at 25 kHz), the low-frequency response of both audio paths and the FD6818 AF filter word, the RX RAM level against
+clipping, decoded voice on the speaker in FM mode, switching times, the modem's CPU load on the CK803S (Phase 4), and
+interoperation with commercial NXDN radios. `docs/nxdn-modem.md` lists what to measure; `docs/hil-checklist.md`
+(Phase 4) will give the steps.
+
 ## 2026-11-13 Phase 1: P25 conventional channels, TX handoff fix
 
 **TX handoff.** Blocks now go to TX RAM only in the PHY_RDY interrupt, the first
