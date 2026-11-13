@@ -9,19 +9,21 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/p25t-host"
 SAN = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"]
-CFLAGS = ["-std=c11", "-O1", "-g", "-Wall", "-Wextra", "-Werror", *SAN, "-Isrc/p25", "-Isrc/p25t", "-Itests/p25t"]
-LIB = ["src/p25/p25.c", *sorted(str(p.relative_to(ROOT)) for p in (ROOT / "src/p25t").glob("*.c"))]
-# each test and the helpers it links (tests/p25t)
-TESTS = {"test_tsbk": [], "test_su": ["site.c"]}
+CFLAGS = ["-std=c11", "-O1", "-g", "-Wall", "-Wextra", "-Werror", *SAN, "-Isrc/p25", "-Isrc/p25t", "-Isrc/p25p2",
+          "-Itests/p25t"]
+LIB = ["src/p25/p25.c", *sorted(str(p.relative_to(ROOT)) for d in ("src/p25t", "src/p25p2")
+                               for p in (ROOT / d).glob("*.c"))]
+# each test (under tests/) and the helpers it links
+TESTS = {"p25t/test_tsbk": [], "p25p2/test_p2": [], "p25t/test_su": ["p25t/site.c"]}
 
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     for name, helpers in TESTS.items():
-        extra = [f"tests/p25t/{h}" for h in helpers]
-        subprocess.run(["clang", *CFLAGS, f"tests/p25t/{name}.c", *extra, *LIB, "-lm", "-o", str(OUT / name)],
-                       check=True, cwd=ROOT)
-        subprocess.run([str(OUT / name)], check=True, cwd=ROOT)
+        extra = [f"tests/{h}" for h in helpers]
+        exe = OUT / Path(name).name
+        subprocess.run(["clang", *CFLAGS, f"tests/{name}.c", *extra, *LIB, "-lm", "-o", str(exe)], check=True, cwd=ROOT)
+        subprocess.run([str(exe)], check=True, cwd=ROOT)
     return 0
 
 
