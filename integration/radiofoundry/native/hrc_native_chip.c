@@ -3,8 +3,15 @@
  * RadioFoundry dfbaf20c hrc7000_bs.c raw-TX sequencing. Hardware-unverified.
  * RF_MODE, RF_MOD_BIAS, DEV_LIMITER and RX FIR are deliberately never written:
  * board routing/calibration is retained, not replaced by the guide's IF example.
- * Both TX halves get identical bytes, matching upstream's tested default; this
- * does not assert measured alternate-buffer ownership or P25 pulse shaping. */
+ *
+ * TX handoff: Table 46 says SEND_DATA0 and SEND_DATA1 alternate. Each block is
+ * written to both halves (upstream's measured default), so the result does not
+ * depend on which half the modem reads next. The write happens in the PHY_RDY
+ * interrupt, the first of each slot, as upstream's DMR BS driver does (its CACH,
+ * the first 24 bits, decoded on every burst). The 2026-11-06 traces wrote on
+ * the TX-slot vector about 0.44 ms later and lost the first three bytes of
+ * every block to the previous one. TX start only configures the modem and the
+ * interrupts; it writes no block and no send bit. */
 #include "hrc_native_chip.h"
 #include <string.h>
 #define RX_DONE (1u<<11)
@@ -50,9 +57,6 @@ static int start(void *ctx, nt_test *t)
 {
     hn_chip *d=ctx;
     d->test=t; d->prepared=1; d->saved_valid=0;
-#if CONFIG_DEV_TX
-    d->staged_index=0; /* index zero is the bootstrapping write on TX_SLOT */
-#endif
     if (!d->hooks->prepare(d->hooks->ctx,&t->config)) return 0;
     for (unsigned i=0;i<HN_REGS;i++) d->saved[i]=hrc7000_rd(d->modem,regs[i]);
     d->saved_valid=1;
@@ -83,35 +87,12 @@ static void copy_block(hn_chip *d, const uint8_t raw[36])
 {
     for (unsigned i=0;i<36;i++) { d->modem->buf[i]=raw[i]; d->modem->buf[36+i]=raw[i]; }
 }
-#if CONFIG_DEV_TX
-static void stage_live(hn_chip *d, uint32_t now)
-{
-    nt_test *t=d->test;
-    if (!nt_tx_live(&t->config) || t->state!=NT_TX || !t->stats.tx_sent || !t->tx_count ||
-        d->staged_index==t->stats.tx_sent) return;
-    /* PHY_RDY for the next slot is about 26.3 ms after the preceding strobe.
-     * A same-slot duplicate must never overwrite the block still on air. */
-    uint32_t age=now-t->boundary_us;
-    if (age<23000u || age>28500u) return;
-    const nt_block *b=&t->tx[t->tx_tail];
-    if (b->index!=t->stats.tx_sent) return;
-    copy_block(d,b->raw);
-    d->staged_index=b->index;
-    nt_trace_stage(t,now);
-}
-#endif
+/* Called only from the PHY_RDY interrupt (nt_boundary). */
 static int write_block(void *ctx, const uint8_t raw[36])
 {
     hn_chip *d=ctx;
-#if CONFIG_DEV_TX
-    if (nt_tx_live(&d->test->config) && d->test->stats.tx_sent) {
-        /* This slot has already begun fetching its head. If the early
-         * handoff was missed, stop rather than transmit a mixed block. */
-        if (d->staged_index!=d->test->stats.tx_sent) return 0;
-    } else
-#endif
-        copy_block(d,raw);
-    w(d,C7_LAYER2_TXRX_CTRL,0x80); return 1; /* one send, no autotest/repeat */
+    copy_block(d,raw);
+    w(d,C7_LAYER2_TXRX_CTRL,0x80); return 1; /* send in the coming slot, no autotest/repeat */
 }
 static void cancel(void *ctx) { w(ctx,C7_LAYER2_TXRX_CTRL,0); }
 static void key(void *ctx) { hn_chip *d=ctx; d->hooks->key_request(d->hooks->ctx); }
@@ -122,6 +103,10 @@ static int restore(void *ctx)
 {
     hn_chip *d=ctx;
     if (d->saved_valid) {
+        /* Release both slot syncs as upstream's BS stop does, so a session
+         * that acquired P25 sync in RX cannot hold the next TX start. */
+        w(d,C7_LAYER2_TXRX_CTRL,HN_TXRX_SYNC_RELEASE);
+        w(d,C7_LAYER2_TXRX_CTRL,0);
         w(d,C7_WORK_MODE,C7_WORK_MODE_FM);
         for (unsigned i=1;i<HN_REGS;i++)
             w(d,regs[i],i==3 ? d->saved[i]&~0x80u : d->saved[i]);
@@ -157,12 +142,7 @@ void hn_sys(hn_chip *d, uint32_t now)
         if (d->test->state!=NT_RX) return;
     }
     if (flags&RX_DONE) nt_rx(d->test,now,flags,info,raw);
-    if (flags&PHY_READY) {
-        nt_boundary(d->test,NT_IRQ_PHY,now);
-#if CONFIG_DEV_TX
-        stage_live(d,now);
-#endif
-    }
+    if (flags&PHY_READY) nt_boundary(d->test,NT_IRQ_PHY,now);
 }
 void hn_slot(hn_chip *d, uint8_t source, uint32_t now)
 {

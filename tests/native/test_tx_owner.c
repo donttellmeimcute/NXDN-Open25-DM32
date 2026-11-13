@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Actual controller/lab/grant with the existing board/scheduler fixtures. */
 #define main native_fixture_main
+#define NATIVE_CHANNEL_TEST
 #include "test_lab.c"
 #undef main
 #include "firstboot/firstboot.h"
@@ -45,20 +46,36 @@ int main(void)
     put(arm_req+9,145500000);put(arm_req+13,0x3532504e);
     assert(call(arm_req,17,512)==1 && reply[0]==DL_ST_BUSY && !starts);
     update_active=false;
+    /* The radio core's P25 channel, with the laboratory gate built in. */
     fresh();
+    sm.view.ch.mode=RADIO_MODE_P25;
+    native_channel ch={145500000,145500000,0};
+    assert(native_lab_channel(&ch) && native_lab_reserved() && !native_lab_owns());
+    native_lab_service(&sm,clock_us);native_lab_service(&sm,clock_us);
+    assert(rx_sid && starts==1 && live->state==NT_RX && !live->config.duration_ms && live->config.frequency_hz==145500000);
+    assert(!native_lab_owns()); /* the radio core keeps running on its own channel */
+    radio_req_t chg={.type=RREQ_CH_STEP,.arg=1};
+    assert(!native_lab_request(&sm,&chg) && live->state==NT_RX); /* every request is the radio core's */
     ptt.arg=NATIVE_PHYSICAL_PTT_DOWN;
-    assert(native_lab_request(&sm,&ptt) && !live_press && !starts);
+    assert(native_lab_request(&sm,&ptt)); /* the bench path's duplicate edges are dropped */
+    /* Gate not armed by the cable this boot: PTT is refused and RX comes back */
+    native_channel_state cs;
+    assert(native_lab_channel_ptt(true) && live->state==NT_STOPPED);
+    native_lab_service(&sm,clock_us);assert(native_lab_voice_release(rx_sid));
+    rx_sid=0;native_lab_service(&sm,clock_us);
+    native_lab_channel_state(&cs);
+    assert(!live_press && cs.calls==1 && cs.reason==NT_DENIED && !cs.transmitting);
+    assert(native_lab_channel_ptt(false));
+    native_lab_service(&sm,clock_us);native_lab_service(&sm,clock_us);
+    assert(rx_sid && live->state==NT_RX);
     uint8_t enable[]={10,1},raw[36]={0};
     assert(call(enable,2,512)==1 && !reply[0]);
-    native_lab_service(&sm,clock_us);native_lab_service(&sm,clock_us);
-    assert(rx_sid && starts==1 && live->state==NT_RX && !live->config.duration_ms);
-    ptt.arg=1;
-    assert(native_lab_request(&sm,&ptt) && !live_press && live->state==NT_RX); /* host down */
     for (unsigned call_no=1;call_no<=2;call_no++) {
-        ptt.arg=NATIVE_PHYSICAL_PTT_DOWN;
-        assert(native_lab_request(&sm,&ptt) && live->state==NT_STOPPED);
+        assert(native_lab_channel_ptt(true) && live->state==NT_STOPPED);
         native_lab_service(&sm,clock_us);assert(native_lab_voice_release(rx_sid));
-        native_lab_service(&sm,clock_us);assert(live_press==call_no && native_lab_owns());
+        native_lab_service(&sm,clock_us);assert(live_press==call_no && !native_lab_owns());
+        native_lab_channel_state(&cs);assert(cs.transmitting && !cs.keyed);
+        assert(live->config.frequency_hz==145500000 && live->config.power==0);
         assert(native_lab_live_block(local_sid,raw,0) && native_lab_live_block(local_sid,raw,0));
         assert(native_lab_live_go(local_sid));native_lab_service(&sm,clock_us);
         assert(live->state==NT_TX && !live->config.duration_ms && !live->config.blocks);
@@ -70,20 +87,22 @@ int main(void)
         for (unsigned block=0;block<201;block++) {
             clock_us+=30000;
             assert(native_lab_live_poll(local_sid,&state,&reason,&queued) && state==NT_TX);
-            nt_boundary(live,NT_IRQ_TX_SLOT,clock_us);
+            nt_boundary(live,NT_IRQ_PHY,clock_us);
             if (!block && call_no==2) {
                 nt_rf_tx(live,clock_us+1000);
                 nt_pa_ready(live,clock_us+29000);
+                native_lab_channel_state(&cs);assert(cs.keyed);
             }
             assert(native_lab_live_block(local_sid,raw,0));
         }
-        ptt.arg=NATIVE_PHYSICAL_PTT_UP;
-        assert(native_lab_request(&sm,&ptt) && live_release==call_no);
+        assert(native_lab_channel_ptt(false) && live_release==call_no);
         assert(native_lab_live_block(local_sid,raw,1) && !native_lab_live_block(local_sid,raw,0));
-        for (unsigned block=0;block<3;block++) { clock_us+=30000;nt_boundary(live,NT_IRQ_TX_SLOT,clock_us); }
+        for (unsigned block=0;block<3;block++) { clock_us+=30000;nt_boundary(live,NT_IRQ_PHY,clock_us); }
         assert(live->state==NT_DRAIN);
         clock_us+=50000;native_lab_service(&sm,clock_us);
         assert(live->reason==NT_TX_COMPLETE && native_lab_voice_release(local_sid));
+        native_lab_channel_state(&cs);
+        assert(cs.calls==1+call_no && cs.reason==NT_TX_COMPLETE && cs.blocks==204 && !cs.transmitting);
         native_lab_service(&sm,clock_us);native_lab_service(&sm,clock_us);
         assert(live->state==NT_RX && !retunes);
         assert(call(&trace_op,1,512)==1+4*NT_TRACE_WORDS && !reply[0]);
@@ -96,9 +115,27 @@ int main(void)
         page[5]=NT_TRACE_BLOCKS;
         assert(call(page,7,512)==1 && reply[0]==DL_ST_REFUSED);
     }
-    enable[1]=0;assert(call(enable,2,512)==1 && !reply[0]);
+    /* Another frequency than the gate's: refused even when armed */
+    assert(native_lab_channel(NULL) && !live->owned);
+    assert(native_lab_voice_release(rx_sid));
+    native_channel other={146520000,146520000,0};
+    sm.view.ch.rx_hz=sm.view.ch.tx_hz=146520000;
+    assert(native_lab_channel(&other));
+    native_lab_service(&sm,clock_us);native_lab_service(&sm,clock_us);
+    assert(live->state==NT_RX && live->config.frequency_hz==146520000);
+    unsigned presses=live_press;
+    assert(native_lab_channel_ptt(true));
     native_lab_service(&sm,clock_us);assert(native_lab_voice_release(rx_sid));
-    assert(!native_lab_owns() && retunes==1);
+    native_lab_service(&sm,clock_us);
+    native_lab_channel_state(&cs);assert(live_press==presses && cs.reason==NT_DENIED);
+    /* Leaving the channel hands the board back at once */
+    assert(native_lab_channel_ptt(false));
+    native_lab_service(&sm,clock_us);native_lab_service(&sm,clock_us);
+    assert(live->state==NT_RX);
+    unsigned before=restores;
+    assert(native_lab_channel(NULL) && !live->owned && restores==before+1);
+    native_lab_service(&sm,clock_us);assert(native_lab_voice_release(rx_sid));
+    assert(!native_lab_owns() && !native_lab_reserved() && retunes==0);
     assert(!depth);
     puts("Native TX ownership: PTT cancels, battery/admission failures, setup interruption, lease and updater exclusion PASS");
 }

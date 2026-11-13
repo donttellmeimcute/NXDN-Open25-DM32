@@ -22,7 +22,7 @@ static uint32_t output_crc;
 void audio_test_enter(void) { depth++; }
 void audio_test_exit(void) { assert(depth);depth--; }
 BaseType_t xTaskCreate(void (*fn)(void *),const char *name,unsigned n,void *ctx,unsigned prio,TaskHandle_t *h)
-{ (void)name;(void)ctx;assert(n==(CONFIG_P25_BENCH?2048:1024) && prio==3);task_fn=fn;*h=(void *)1;return pdPASS; }
+{ (void)name;(void)ctx;assert(n==(CONFIG_P25_BENCH || CONFIG_P25_NATIVE?2048:1024) && prio==3);task_fn=fn;*h=(void *)1;return pdPASS; }
 void xTaskNotifyGive(TaskHandle_t h) { assert(h && !depth);notifies++; }
 uint32_t ulTaskNotifyTake(BaseType_t clear,TickType_t wait)
 { assert(clear && wait==portMAX_DELAY);if(turn++)longjmp(done,1);return 1; }
@@ -63,6 +63,11 @@ int native_lab_voice_read(uint32_t sid,nt_record *r) {
 }
 void native_lab_voice_stop(uint32_t sid) { assert(sid==42); }
 int native_lab_voice_release(uint32_t sid) { assert(sid==42);native_owned=0;return 1; }
+/* The live (channel TX) side is not exercised by these receive tests. */
+int native_lab_live_poll(uint32_t sid,uint8_t *state,uint8_t *reason,uint8_t *queued) { (void)sid;(void)state;(void)reason;(void)queued;return 0; }
+int native_lab_live_block(uint32_t sid,const uint8_t raw[36],int last) { (void)sid;(void)raw;(void)last;return 0; }
+int native_lab_live_go(uint32_t sid) { (void)sid;return 0; }
+void native_lab_live_summary(uint32_t out[5]) { for (unsigned i=0;i<5;i++) out[i]=0; }
 static uint8_t reply[1024];
 static unsigned call(const uint8_t *p,unsigned len,unsigned cap) { unsigned n=p25_lab_command(p,len,reply,cap);assert(!depth);return n; }
 static uint32_t word(unsigned n) { uint32_t x;memcpy(&x,reply+1+4*n,4);return x; }

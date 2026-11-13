@@ -1,0 +1,41 @@
+{
+  "date": "2026-11-13",
+  "phase": 1,
+  "presets": {
+    "native": {
+      "flash_bytes": 445012,
+      "main_ram_bytes": 190384,
+      "main_ram_free_bytes": 21072,
+      "flash_delta_vs_phase0": 7668,
+      "ram_delta_vs_phase0": 1288
+    },
+    "lab": {
+      "flash_bytes": 432024,
+      "main_ram_bytes": 184408,
+      "main_ram_free_bytes": 27048,
+      "flash_delta_vs_phase0": 2528,
+      "ram_delta_vs_phase0": 912
+    },
+    "off": {
+      "flash_bytes": 393488,
+      "main_ram_bytes": 160544,
+      "main_ram_free_bytes": 50912,
+      "flash_delta_vs_phase0": 2412,
+      "ram_delta_vs_phase0": 904
+    },
+    "native-lean": {
+      "flash_bytes": 443256,
+      "main_ram_bytes": 187968,
+      "main_ram_free_bytes": 23488,
+      "flash_delta_vs_phase0": 20612,
+      "ram_delta_vs_phase0": 5384
+    },
+    "firstboot-lean-dev-tx": {
+      "flash_bytes": 472472,
+      "main_ram_bytes": 196032,
+      "main_ram_free_bytes": 15424,
+      "flash_delta_vs_phase0": 4424,
+      "ram_delta_vs_phase0": 880
+    }
+  }
+}

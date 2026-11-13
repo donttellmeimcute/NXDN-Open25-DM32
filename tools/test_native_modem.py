@@ -16,6 +16,9 @@ def main():
     run(["clang",*flags,"src/modem/native_test.c","integration/radiofoundry/native/hrc_native_chip.c",
          "tests/native/test_native.c","-o",OUT/"test_native"])
     run([OUT/"test_native"])
+    run(["clang",*flags,"src/modem/native_test.c","integration/radiofoundry/native/hrc_native_chip.c",
+         "tests/native/test_tx_handoff.c","-o",OUT/"test_tx_handoff"])
+    run([OUT/"test_tx_handoff"])
     run(["clang",*flags,"-Itests/native/stubs","-Iintegration/radiofoundry","-I"+str(app/"core"),
          "-I"+str(app/"hal"),"-DCONFIG_P25_NATIVE=1","-Wno-unused-parameter",
          "src/modem/native_test.c","integration/radiofoundry/native/native_lab.c","tests/native/test_lab.c",

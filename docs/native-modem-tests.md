@@ -144,6 +144,44 @@ transmitted. The header's `pic_pending_1` field is a historical interrupt
 request latch at handler setup; it does not establish a live pending request
 for the call.
 
+## TX handoff
+
+The modem sends TX RAM in the slot that starts a few milliseconds after a slot
+interrupt. PHY_RDY is the first interrupt of every slot. The 2026-11-06 traces
+wrote each block on the TX-slot vector, 0.43-0.45 ms after PHY_RDY; on air the
+first three bytes of every block were the previous block's and the other 33
+the intended ones. The modem therefore takes the head of the coming slot
+before the TX-slot vector arrives.
+
+The driver now hands blocks over only in PHY_RDY:
+
+- TX start configures the modem, the interrupt mask and the slot syncs. It
+  writes no block and no send bit.
+- Each PHY_RDY writes the next block to both TX RAM halves (SEND_DATA0 and
+  SEND_DATA1 alternate, guide Table 46; writing both is upstream's measured
+  default) and sets the send bit. A second PHY_RDY within half a slot is
+  ignored, so the block on air is never overwritten.
+- The TX-slot and RX-slot vectors only supervise. A TX-slot vector more than
+  20 ms after the last PHY_RDY means that slot's PHY_RDY was lost; the run
+  stops (`NT_LATE`) instead of writing a block whose head already went out.
+- Leaving a session releases both slot syncs before restoring the saved
+  registers, as upstream's BS driver does on stop. This is aimed at the silent
+  call after a received P25 call; it is unverified.
+
+`tests/native/test_tx_handoff.c` models the traced timing (PHY_RDY, head
+fetch, TX-slot vector, tail fetch, alternating or fixed halves, interrupt
+latency, PHY_RDY jitter). With the old write point it reproduces the traced
+signature (every head symbol from the previous block, every tail byte correct,
+every block recovered by substituting the intended three bytes). With the real
+driver and controller every block reaches the model's air byte-exact, and a
+lost PHY_RDY stops the run before a mixed block. The raw traces stay on the
+bench PC; `tools/tx_trace_replay.py` compares a saved trace (`p25_channel.py
+trace`) with the blocks demodulated from an independent capture and reports
+the same head statistics.
+
+Unverified in hardware: the head fetch time, that PHY_RDY always precedes the
+TX-slot vector, and that the PHY_RDY write clears the lag on air.
+
 ## Reproduce without hardware
 
 Run from the repository root:

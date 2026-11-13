@@ -63,10 +63,12 @@ static void short_call(void)
     check_frame(air + 315, 18, P25_DUID_TDU);
     feed(air, sizeof air);
     assert(blocks == 9 && loud && !v.rx_muted && !v.rx_erasures);
-    assert(!v.crypto_clear && !v.have_group); /* terminator */
+    assert(!v.crypto_clear && !v.have_group && !v.playing); /* terminator */
+    assert(v.last_duid == P25_DUID_TDU && v.last_nac == 0x293 && !v.foreign_frames);
     reset(0x294, 42);
     feed(air, sizeof air);
-    assert(blocks == 0); /* wrong NAC */
+    assert(blocks == 0); /* wrong NAC: never played... */
+    assert(v.foreign_frames == 3 && v.last_nac == 0x293 && !v.rx_frames && !v.playing); /* ...but seen (busy lockout) */
     reset(0x293, 43);
     feed(air, sizeof air);
     assert(blocks == 9 && loud == 0 && v.rx_muted == 9); /* wrong group */

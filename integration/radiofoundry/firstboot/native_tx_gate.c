@@ -10,7 +10,7 @@ static nt_test *owner;
 static uint32_t session;
 bool firstboot_native_tx_config(const nt_config *c)
 {
-    if (!c || c->mode!=NT_TRANSMIT || c->frequency_hz!=145500000u || c->p25_sync!=1) return false;
+    if (!c || c->mode!=NT_TRANSMIT || c->frequency_hz!=145500000u || c->p25_sync!=1 || c->power) return false;
     if (c->audio) return c->audio==1 && !c->duration_ms && c->lease_ms==250;
     return
         c->blocks && c->blocks<=NT_MAX_BLOCKS && c->duration_ms && c->duration_ms<=NT_MAX_MS &&

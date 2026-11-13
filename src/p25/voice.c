@@ -5,6 +5,7 @@
 static void admission_reset(p25_voice *v)
 {
     v->crypto_clear = v->have_group = 0;
+    v->playing = v->emergency = v->encrypted = 0;
     v->active_nac = P25_NAC_ANY;
     v->active_group = 0;
     v->active_source = 0;
@@ -15,7 +16,7 @@ void p25_voice_rx_reset(p25_voice *v)
 {
     /* Stale receive records must not reset the shared active TX codec. */
     if (v->transmitting) return;
-    p25_rx_init(&v->framer, v->framer.expected_nac, 2);
+    p25_rx_init(&v->framer, P25_NAC_ANY, 2);
     admission_reset(v);
 }
 
@@ -26,7 +27,9 @@ void p25_voice_init(p25_voice *v, uint16_t nac, uint16_t group,
     v->sink = sink;
     v->sink_ctx = ctx;
     v->group_filter = group;
-    p25_rx_init(&v->framer, nac == 0xf7e ? P25_NAC_ANY : nac, 2);
+    v->nac_filter = nac == 0xf7e ? P25_NAC_ANY : nac;
+    v->last_nac = P25_NAC_ANY;
+    p25_rx_init(&v->framer, P25_NAC_ANY, 2);
     admission_reset(v);
 }
 
@@ -40,6 +43,13 @@ void p25_voice_rx_dibit(p25_voice *v, uint8_t dibit)
     if (elapsed>v->fec_max_us)v->fec_max_us=elapsed;
     if (decoded) {
         admission_reset(v);
+        return;
+    }
+    v->last_nac = d.nid.nac;
+    v->last_duid = d.nid.duid;
+    if (v->nac_filter != P25_NAC_ANY && d.nid.nac != v->nac_filter) {
+        v->foreign_frames++;
+        if (v->active_nac != P25_NAC_ANY) admission_reset(v);
         return;
     }
     v->rx_frames++;
@@ -68,6 +78,7 @@ void p25_voice_rx_dibit(p25_voice *v, uint8_t dibit)
         v->active_source = d.source_id;
         v->have_group = d.talkgroup && d.source_id && d.source_id <= 9999999u;
         if (!d.clear_voice) v->crypto_clear = 0;
+        v->emergency = (d.service_options & 0x80u) != 0;
         /* LC's unprotected bit alone cannot override an encrypted ALGID.
          * Late entry waits for a valid LDU2 encryption sync. */
     } else if (d.nid.duid == P25_DUID_LDU2) {
@@ -76,6 +87,8 @@ void p25_voice_rx_dibit(p25_voice *v, uint8_t dibit)
     if (d.nid.duid != P25_DUID_LDU1 && d.nid.duid != P25_DUID_LDU2) return;
     int admitted = v->crypto_clear && v->have_group &&
         (!v->group_filter || v->active_group == v->group_filter || v->active_group == 0xffff);
+    v->playing = (uint8_t)admitted;
+    v->encrypted = d.metadata_valid && !d.clear_voice;
     for (unsigned i = 0; i < 9; i++) {
         int16_t pcm[160] = {0};
         if (!admitted) v->rx_muted++;

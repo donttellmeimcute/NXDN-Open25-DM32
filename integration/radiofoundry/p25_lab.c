@@ -13,9 +13,6 @@
 #include "debuglink/dl_fmt.h"
 #include "FreeRTOS.h"
 #include "task.h"
-#if CONFIG_DEV_TX
-#include "input/input.h"
-#endif
 #if CONFIG_P25_NATIVE
 #include "native_modem/native_lab.h"
 #endif
@@ -45,7 +42,36 @@ static uint32_t callbacks,played,played_nonzero,session,gaps,unsupported;
 static uint8_t native_state,native_reason,audio_on;
 static uint8_t pcm_paced=1;
 static p25_phy_rx phy;
-#if CONFIG_DEV_TX
+#if CONFIG_P25_NATIVE
+/* The radio core's P25 channel: its call parameters and what RX hears. */
+static p25_lab_channel chan;
+static p25_lab_rx_status rx_status;
+void p25_lab_channel_config(const p25_lab_channel *c)
+{
+    taskENTER_CRITICAL();chan=*c;taskEXIT_CRITICAL();
+}
+void p25_lab_rx_status_get(p25_lab_rx_status *s)
+{
+    taskENTER_CRITICAL();*s=rx_status;taskEXIT_CRITICAL();
+}
+static void publish_rx(void)
+{
+    taskENTER_CRITICAL();
+    if (voice.last_nac!=P25_NAC_ANY && (voice.rx_frames!=rx_status.frames || voice.foreign_frames!=rx_status.foreign_frames)) {
+        rx_status.last_frame_ms=hal_millis();
+        rx_status.nac=voice.last_nac;
+        rx_status.ours=voice.foreign_frames==rx_status.foreign_frames;
+    }
+    rx_status.frames=voice.rx_frames;
+    rx_status.foreign_frames=voice.foreign_frames;
+    rx_status.playing=voice.playing;
+    rx_status.talkgroup=voice.active_group;
+    rx_status.source=voice.active_source;
+    rx_status.encrypted=voice.encrypted;
+    rx_status.emergency=voice.emergency;
+    rx_status.ended=voice.last_duid==P25_DUID_TDU || voice.last_duid==P25_DUID_TDULC;
+    taskEXIT_CRITICAL();
+}
 static uint32_t live_sid;
 static volatile uint8_t live_released,live_capturing;
 static uint32_t live_mic_frames,live_peak,live_encode_max,live_encode_us,live_slow;
@@ -75,7 +101,7 @@ int p25_lab_channel_rx(uint32_t hz)
     taskENTER_CRITICAL();
     int ok=worker && state!=1;
     if (ok) {
-        frequency=hz;nac=0x293;group=1;duration_ms=0;
+        frequency=hz;nac=chan.nac_rx;group=chan.hear_all?0:chan.talkgroup;duration_ms=0;
         request_mode=5;play_requested=1;delay_seconds=0;stop_requested=0;
         state=1;
     }
@@ -109,7 +135,10 @@ static unsigned queued_symbols(void)
 
 static int live_run(void)
 {
-    const p25_call call={0x293,1,1,0,0,0};
+    p25_call call={0};
+    taskENTER_CRITICAL();
+    call.nac=chan.nac_tx;call.talkgroup=chan.talkgroup;call.source_id=chan.unit_id;
+    taskEXIT_CRITICAL();
     int16_t pcm[160];
     uint8_t raw[36],queued=0;
     unsigned lead=3;
@@ -130,7 +159,7 @@ static int live_run(void)
     while (ok && !stop_requested) {
         if (!native_lab_live_poll(sid,&native_state,&native_reason,&queued) || native_state==NT_FAULT) { ok=false;break; }
         if (native_state==NT_STOPPED) { ok=sealed && native_reason==NT_TX_COMPLETE;break; }
-        bool closing=live_released || !input_physical_ptt();
+        bool closing=live_released;
         if (closing && live_capturing) {
             live_capturing=0;
             board.audio->stop();
@@ -358,10 +387,11 @@ static int receive_run(void)
                 if(last_tick && (delta>45000u || delta<15000u)) { gaps++;reset_stream(); }
                 last_tick=r.time_us;last_record_at=hal_millis();silent_reset=0;
                 consume(r.sequence,(uint8_t)(r.rx_info&3u),r.raw);
-                if (request_mode==5) vTaskDelay(1);
+                if (request_mode==5) { publish_rx();vTaskDelay(1); }
             } else {
                 if(!silent_reset && hal_millis()-last_record_at>500) {
                     reset_stream();silent_reset=1;
+                    if (request_mode==5) publish_rx();
                 }
                 relax();
             }
@@ -408,7 +438,7 @@ static void run(void *ctx)
             taskENTER_CRITICAL();result=r;taskEXIT_CRITICAL();ok=r.ok;
         } else
 #endif
-#if CONFIG_DEV_TX
+#if CONFIG_P25_NATIVE
         if(request_mode==4) ok=live_run(); else
 #endif
         ok=receive_run();
@@ -416,8 +446,8 @@ static void run(void *ctx)
         taskENTER_CRITICAL();stack_free=free_bytes;state=ok?2:3;taskEXIT_CRITICAL();
     }
 }
-#if CONFIG_P25_BENCH || CONFIG_DEV_TX
-#define P25_WORKER_WORDS 2048 /* synthetic encoder is the deepest path */
+#if CONFIG_P25_BENCH || CONFIG_P25_NATIVE
+#define P25_WORKER_WORDS 2048 /* the encoder (live TX, synthetic test) is the deepest path */
 #else
 #define P25_WORKER_WORDS 1024 /* RX: static bound 2368 B; >1.5 KiB margin */
 #endif
@@ -432,7 +462,7 @@ size_t p25_lab_command(const uint8_t *req,uint16_t len,uint8_t *out,size_t cap)
     if(!cap)return 0;
     out[0]=DL_ST_BAD_ARG;
     if(!req || !len)return 1;
-#if CONFIG_DEV_TX
+#if CONFIG_P25_NATIVE
     if (req[0]==13 && len==1) {
         out[0]=DL_ST_OK;
         dl_text_t t;dl_text_init(&t,(char *)out+1,cap-1);

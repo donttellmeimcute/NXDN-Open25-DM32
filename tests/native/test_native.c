@@ -15,7 +15,7 @@ static void key(void *p) { ((mock*)p)->keys++; }
 static void off(void *p) { ((mock*)p)->offs++; }
 static int restore(void *p) { mock *x=p; x->restores++; return !x->bad_restore; }
 static nt_ops ops={&m,start,write_block,cancel,request,key,off,restore,NULL,NULL,NULL};
-static nt_config cfg(unsigned mode,unsigned count) { return (nt_config){145500000,count,2000,250,mode,1,0}; }
+static nt_config cfg(unsigned mode,unsigned count) { return (nt_config){145500000,count,2000,250,mode,1,0,0}; }
 static void reset(void) { memset(&m,0,sizeof m); nt_init(&t,&ops); }
 static void load(unsigned index) { uint8_t b[36]; for(unsigned j=0;j<36;j++) b[j]=(uint8_t)(index*37+j); assert(nt_load(&t,t.session,index,b)); }
 static void begin(unsigned mode,unsigned count,uint32_t now)
@@ -45,26 +45,33 @@ static void valid_tx(void)
     assert(nt_cleanup(&t) && !nt_cleanup(&t) && m.restores==1);
     assert(nt_stop(&t,t.session,NT_USER_STOP) && m.offs==1); /* idempotent */
 }
-static void independent_boundary_phases(void)
+static void phy_rdy_handoff(void)
 {
-    /* Actual first attempt: TX slot primed at 7,651 us; PHY_RDY at 34,006.
-     * The 26,355-us cross-source gap must not advance or fault the TX clock. */
+    /* Slot vectors never hand a block over, before or after the first PHY_RDY.
+     * The traced TX-slot vector came 0.43-0.45 ms after its PHY_RDY. */
     begin(NT_TRANSMIT,4,0);
     nt_boundary(&t,NT_IRQ_TX_SLOT,7651);
     nt_boundary(&t,NT_IRQ_RX_SLOT,8000);
+    assert(t.state==NT_TX && t.stats.tx_sent==0 && !m.writes);
     nt_boundary(&t,NT_IRQ_PHY,34006);
-    assert(t.state==NT_TX && t.stats.tx_sent==1 && !t.stats.faults);
-    nt_boundary(&t,NT_IRQ_TX_SLOT,37651);
-    assert(t.stats.tx_sent==2 && t.stats.last_gap_us==30000);
-    /* Other sources do not hide a stalled selected source. */
+    nt_boundary(&t,NT_IRQ_TX_SLOT,34446);
+    assert(t.stats.tx_sent==1 && m.writes==1 && !t.stats.faults);
     nt_boundary(&t,NT_IRQ_PHY,64006);
-    nt_boundary(&t,NT_IRQ_RX_SLOT,67651);
-    nt_boundary(&t,NT_IRQ_PHY,94006);
-    nt_tick(&t,97651);
-    assert(t.state==NT_FAULT && t.reason==NT_STALLED && t.stats.tx_sent==2);
-    begin(NT_TRANSMIT,4,0);nt_boundary(&t,NT_IRQ_TX_SLOT,1000);
-    nt_boundary(&t,NT_IRQ_PHY,1500);nt_boundary(&t,NT_IRQ_TX_SLOT,21000);
-    assert(t.reason==NT_EARLY);
+    nt_boundary(&t,NT_IRQ_TX_SLOT,64446);
+    nt_boundary(&t,NT_IRQ_RX_SLOT,79446);
+    assert(t.stats.tx_sent==2 && m.writes==2 && t.stats.last_gap_us==30000);
+    /* A lost PHY_RDY: its slot's TX vector arrives a slot after the last
+     * handoff. Stop rather than write a block whose head already went out. */
+    nt_boundary(&t,NT_IRQ_TX_SLOT,94446);
+    assert(t.state==NT_FAULT && t.reason==NT_LATE && t.stats.tx_sent==2 && m.writes==2 && m.offs==1);
+    /* A second PHY_RDY in the same slot never overwrites the block on air. */
+    begin(NT_TRANSMIT,4,0);
+    nt_boundary(&t,NT_IRQ_PHY,1000); nt_boundary(&t,NT_IRQ_PHY,1300);
+    assert(t.stats.tx_sent==1 && m.writes==1 && t.stats.duplicate_irqs==1);
+    nt_boundary(&t,NT_IRQ_PHY,21000); assert(t.reason==NT_EARLY);
+    /* Several lost PHY_RDYs without slot vectors: the stall guard stops it. */
+    begin(NT_TRANSMIT,4,0); nt_boundary(&t,NT_IRQ_PHY,1000); nt_tick(&t,61001);
+    assert(t.reason==NT_STALLED && t.stats.tx_sent==1);
 }
 static void failures(void)
 {
@@ -175,11 +182,18 @@ static void chip_tests(void)
     unsigned untouched[]={C7_RF_MODE,C7_RF_MOD_BIAS,C7_DEV_LIMITER,C7_SIG_CENTER,0x16c,0x1ac};
     for(unsigned i=0;i<6;i++) assert(regs[untouched[i]/4]==before[untouched[i]/4]);
     assert(prep_count==1 && fast_count==1 && irq_count==1 && restore_count==1);
-    assert(nt_arm(&t,&(nt_config){145500000,2,2000,250,NT_TRANSMIT,0,0},1)); load(0);load(1);
-    assert(nt_begin(&t,t.session,0)); hn_slot(&chip,NT_IRQ_TX_SLOT,1000);
+    assert(nt_arm(&t,&(nt_config){145500000,2,2000,250,NT_TRANSMIT,0,0,0},1)); load(0);load(1);
+    /* TX start writes no block and no send bit; neither does a slot vector. */
+    assert(nt_begin(&t,t.session,0) && buf[0]==0xcc && buf[36]==0xcc && regs[C7_LAYER2_TXRX_CTRL/4]==0);
+    hn_slot(&chip,NT_IRQ_TX_SLOT,500);
+    assert(buf[0]==0xcc && regs[C7_LAYER2_TXRX_CTRL/4]==0 && !t.stats.tx_sent);
+    regs[C7_SYS_INTERP_LIST/4]=1u<<12; hn_sys(&chip,1000);
+    assert(regs[C7_SYS_INTERP_CLEAR/4]==1u<<12);
     for(unsigned j=0;j<36;j++) assert(buf[j]==j && buf[36+j]==j);
     assert(buf[72]==0xcc && regs[C7_LAYER2_TXRX_CTRL/4]==0x80);
-    hn_slot(&chip,NT_IRQ_TX_SLOT,31000);
+    hn_slot(&chip,NT_IRQ_TX_SLOT,1440);
+    for(unsigned j=0;j<36;j++) assert(buf[j]==j); /* the slot vector does not touch TX RAM */
+    regs[C7_SYS_INTERP_LIST/4]=1u<<12; hn_sys(&chip,31000);
     for(unsigned j=0;j<36;j++) assert(buf[j]==(uint8_t)(37+j) && buf[36+j]==(uint8_t)(37+j));
     regs[C7_SYS_INTERP_LIST/4]=1u<<16; hn_sys(&chip,32000);
     assert(t.reason==NT_ABNORMAL && regs[C7_LAYER2_TXRX_CTRL/4]==0 && regs[C7_LAYER2_CONTROL/4]==0);
@@ -211,7 +225,7 @@ static void fuzz(void)
 }
 int main(void)
 {
-    valid_tx(); independent_boundary_phases(); failures(); receive(); chip_tests(); fuzz();
+    valid_tx(); phy_rdy_handoff(); failures(); receive(); chip_tests(); fuzz();
     reset();assert(!nt_arm_voice(&t,145500000,0));assert(!nt_arm_voice(&t,145500000,300001));
     assert(nt_arm_voice(&t,145500000,300000));assert(t.config.mode==NT_RECEIVE && t.config.audio && t.config.duration_ms==300000);
     assert(nt_begin(&t,t.session,0));assert(!nt_load(&t,t.session,0,(uint8_t[36]){0}));

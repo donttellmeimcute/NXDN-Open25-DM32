@@ -1,0 +1,274 @@
+--- a/hal/hal_radio.h
++++ b/hal/hal_radio.h
+@@ -8,7 +8,10 @@
+ #include <stdint.h>
+ #include <stdbool.h>
+ 
+-typedef enum { RADIO_MODE_FM, RADIO_MODE_DMR } radio_mode_t;
++// P25, NXDN and P25 trunking channels (the multi-mode derivative's core/p25 and core/nxdn) run on the modem's
++// native physical layer, which takes the radio over from FM: the board's set_mode() only ever sees FM or DMR
++typedef enum { RADIO_MODE_FM, RADIO_MODE_DMR, RADIO_MODE_P25, RADIO_MODE_NXDN, RADIO_MODE_P25_TRUNK } radio_mode_t;
++#define RADIO_MODE_COUNT	5
+ typedef enum { RADIO_BW_12K5, RADIO_BW_25K } radio_bw_t;
+ 
+ typedef enum { TONE_NONE, TONE_CTCSS, TONE_DCS, TONE_DCS_INV } tone_type_t;
+--- a/core/codeplug/codeplug.h
++++ b/core/codeplug/codeplug.h
+@@ -47,7 +47,25 @@
+ 	uint8_t sfr_flag1;
+ 	uint8_t sfr_a;
+ 	uint8_t sfr_b;
++	// Digital voice (modes RADIO_MODE_P25, _NXDN, _P25_TRUNK; open-firmware-cps.md 7.3.3.1). The unit ID is dmr_id:
++	// the channel's override, else the radio's DMR ID. The record keeps these where FM tones and the DMR contact go
++	uint16_t nac_rx;	// P25: RX NAC 0x000-0xFFF, CODEPLUG_NAC_ANY hears every NAC. NXDN: RX RAN 0-63, 0 hears every RAN
++	uint16_t nac_tx;	// P25: TX NAC 0x000-0xF7D. NXDN: TX RAN 0-63
++	uint16_t talkgroup;	// P25 talkgroup / NXDN group: the TX target (1-65535 / 1-65519), and the group RX plays
++	bool hear_all;		// RX plays every talkgroup (else ours and all call)
++	// P25 trunking (RADIO_MODE_P25_TRUNK; rx_hz is a control channel, tx_hz its inbound): the system the channel
++	// belongs to, from the record's SFR, color code and APRS bytes. 0 when unset
++	uint32_t wacn;		// 20 bits
++	uint16_t sysid;		// 12 bits
+ } channel_t;
++
++#define CODEPLUG_NAC_ANY	0xF7Eu	// RX NAC that hears every NAC (TIA-102.BAAD-B 6.1.1.3)
++#define CODEPLUG_NAC_DEFAULT	0x293u	// the NAC a new P25 channel gets
++// true for the modes stored with the digital voice fields above
++static inline bool codeplug_mode_digital_voice(uint8_t mode)
++{
++	return mode == RADIO_MODE_P25 || mode == RADIO_MODE_NXDN || mode == RADIO_MODE_P25_TRUNK;
++}
+ 
+ // channel_t.alias_tx: what the channel sends as talker alias on each timeslot (text = our radio name)
+ #define CODEPLUG_ALIAS_TS1_TEXT	0x01u
+--- a/core/codeplug/codeplug.c
++++ b/core/codeplug/codeplug.c
+@@ -45,6 +45,7 @@
+ #define CH_SFR_B	0x2Au	// SFR byte B (ours)
+ #define CH_RX_GROUP	0x2Bu
+ #define CH_CC		0x2Cu
++#define CH_APRS		0x2Du	// APRS configuration index (P25 trunking: system ID low byte)
+ #define CH_CONTACT	0x2Eu
+ #define CH_FLAG1	0x30u	// bits 0-1 talker alias on TS1, 2-3 on TS2: 0 off, 1 APRS, 2 text, 3 both
+ #define CH_FLAG2	0x31u
+@@ -613,6 +614,45 @@
+ 	return (uint8_t)((level * 9u + (count - 1u) / 2u) / (count - 1u) + 1u);
+ }
+ 
++// P25 and NXDN channels (open-firmware-cps.md 7.3.3.1): the tone words hold the NACs (RANs), the TX contact word the
++// talkgroup, the timeslot bit "hear every group". A tone word an FM CPS left (0xFFFF, 0) reads as the default
++static void decode_digital(const uint8_t *r, channel_t *out)
++{
++	bool nxdn = out->mode == RADIO_MODE_NXDN;
++	uint16_t rx = le16(&r[CH_RX_TONE]), tx = le16(&r[CH_TX_TONE]);
++	uint16_t max = nxdn ? 63u : 0xFFFu;
++	out->nac_rx = rx <= max ? rx : (nxdn ? 0u : CODEPLUG_NAC_ANY);
++	out->nac_tx = tx <= max && (nxdn || tx < CODEPLUG_NAC_ANY) ? tx : (nxdn ? 1u : CODEPLUG_NAC_DEFAULT);
++	out->talkgroup = out->contact;
++	out->hear_all = (r[CH_FLAG2] & FLAG2_TS2) != 0;
++	out->rx_tone = out->tx_tone = (subtone_t){ TONE_NONE, 0 };
++	out->contact = 0;
++	out->timeslot = 1;
++	out->color_code = 0;
++	if (out->mode == RADIO_MODE_P25_TRUNK) {
++		// WACN 20 bits: SFR A, SFR B, high nibble of the color code byte; system ID 12 bits: low nibble, APRS byte
++		out->wacn = ((uint32_t)r[CH_SFR_A] << 12) | ((uint32_t)r[CH_SFR_B] << 4) | (r[CH_CC] >> 4);
++		out->sysid = (uint16_t)(((r[CH_CC] & 0x0Fu) << 8) | r[CH_APRS]);
++	}
++	out->sfr_flag1 = out->sfr_a = out->sfr_b = 0;
++}
++
++static void encode_digital(const channel_t *ch, uint8_t *r)
++{
++	put16(&r[CH_RX_TONE], ch->nac_rx);
++	put16(&r[CH_TX_TONE], ch->nac_tx);
++	put16(&r[CH_CONTACT], ch->talkgroup);
++	r[CH_FLAG2] = (uint8_t)((r[CH_FLAG2] & ~FLAG2_TS2) | (ch->hear_all ? FLAG2_TS2 : 0));
++	r[CH_CC] = 0;
++	if (ch->mode == RADIO_MODE_P25_TRUNK) {
++		r[CH_SFR_A] = (uint8_t)(ch->wacn >> 12);
++		r[CH_SFR_B] = (uint8_t)(ch->wacn >> 4);
++		r[CH_CC] = (uint8_t)(((ch->wacn & 0x0Fu) << 4) | ((ch->sysid >> 8) & 0x0Fu));
++		r[CH_APRS] = (uint8_t)ch->sysid;
++		r[CH_LFLAG1] &= (uint8_t)~LFLAG1_SFR;	// those bytes are the system now, not an SFR role
++	}
++}
++
+ bool codeplug_openfw_decode(const uint8_t *r, channel_t *out)
+ {
+ 	memset(out, 0, sizeof(*out));
+@@ -620,7 +660,7 @@
+ 		return false;
+ 	}
+ 	copy_name(out->name, &r[CH_NAME], CODEPLUG_NAME_LEN);
+-	out->mode = r[CH_MODE] == 1 ? RADIO_MODE_DMR : RADIO_MODE_FM;
++	out->mode = r[CH_MODE] < RADIO_MODE_COUNT ? r[CH_MODE] : RADIO_MODE_FM;
+ 	out->bw = (r[CH_FLAG4] & FLAG4_25K) ? RADIO_BW_25K : RADIO_BW_12K5;
+ 	out->rx_tone = tone(le16(&r[CH_RX_TONE]));
+ 	out->tx_tone = tone(le16(&r[CH_TX_TONE]));
+@@ -647,6 +687,9 @@
+ 	}
+ 	out->alias_tx = (uint8_t)(((r[CH_FLAG1] & 0x02u) ? CODEPLUG_ALIAS_TS1_TEXT : 0u) |
+ 				  ((r[CH_FLAG1] & 0x08u) ? CODEPLUG_ALIAS_TS2_TEXT : 0u));
++	if (codeplug_mode_digital_voice(out->mode)) {
++		decode_digital(r, out);
++	}
+ 	return true;
+ }
+ 
+@@ -669,7 +712,7 @@
+ 	put_name(&r[CH_NAME], ch->name, CODEPLUG_NAME_LEN);
+ 	put_freq(&r[CH_RX], ch->rx_hz);
+ 	put_freq(&r[CH_TX], ch->tx_hz);
+-	r[CH_MODE] = ch->mode == RADIO_MODE_DMR ? 1 : 0;
++	r[CH_MODE] = (uint8_t)(ch->mode < RADIO_MODE_COUNT ? ch->mode : RADIO_MODE_FM);
+ 	r[CH_POWER] = ch->power == CODEPLUG_POWER_DEFAULT ? 0 : power_to_byte(ch->power);
+ 	put16(&r[CH_RX_TONE], tone_word(&ch->rx_tone));
+ 	put16(&r[CH_TX_TONE], tone_word(&ch->tx_tone));
+@@ -697,6 +740,9 @@
+ 		r[CH_DMR_ID + 1] = 0x16;
+ 		r[CH_DMR_ID + 2] = 0x00;
+ 	}
++	if (codeplug_mode_digital_voice(ch->mode)) {
++		encode_digital(ch, r);
++	}
+ }
+ 
+ static uint32_t ch_errors;	// a used channel that couldn't be read or decoded (codeplug_channel_errors)
+--- a/tests/host/codeplugTest.c
++++ b/tests/host/codeplugTest.c
+@@ -795,6 +795,90 @@
+ }
+ #endif
+ 
++// P25, NXDN and P25 trunking channels in the 56-byte record (open-firmware-cps.md 7.3.3.1)
++static void test_digital_voice_records(void)
++{
++	uint8_t rec[CODEPLUG_OPENFW_CHANNEL_SIZE];
++	channel_t ch, back;
++
++	memset(rec, 0xFF, sizeof(rec));	// erased: the encoder starts from a blank record
++	memset(&ch, 0, sizeof(ch));
++	strcpy(ch.name, "P25 Simplex");
++	ch.rx_hz = ch.tx_hz = 155475000;
++	ch.mode = RADIO_MODE_P25;
++	ch.power = 1;
++	ch.nac_rx = CODEPLUG_NAC_ANY;
++	ch.nac_tx = 0x293;
++	ch.talkgroup = 10101;
++	ch.dmr_id = 1234567;
++	ch.hear_all = true;
++	ch.tot_s = 60;
++	codeplug_openfw_encode(&ch, rec);
++	CHECK(rec[0x18] == 2);
++	CHECK(rec[0x20] == 0x7E && rec[0x21] == 0x0F && rec[0x22] == 0x93 && rec[0x23] == 0x02);
++	CHECK(rec[0x2E] == (10101 & 0xFF) && rec[0x2F] == (10101 >> 8));
++	CHECK(rec[0x26] & 0x80);	// the unit ID is the channel's ID override
++	CHECK(rec[0x31] & 0x40);	// hear every talkgroup
++	CHECK(codeplug_openfw_decode(rec, &back));
++	CHECK(back.mode == RADIO_MODE_P25 && back.nac_rx == CODEPLUG_NAC_ANY && back.nac_tx == 0x293);
++	CHECK(back.talkgroup == 10101 && back.dmr_id == 1234567 && back.hear_all && back.tot_s == 60);
++	CHECK(back.contact == 0 && back.rx_tone.type == TONE_NONE && back.tx_tone.type == TONE_NONE);
++	CHECK(strcmp(back.name, "P25 Simplex") == 0 && back.rx_hz == 155475000 && back.power == 1);
++
++	// An FM CPS's blank tone words read as the defaults; a reserved TX NAC is refused
++	rec[0x20] = rec[0x21] = rec[0x22] = rec[0x23] = 0xFF;
++	CHECK(codeplug_openfw_decode(rec, &back));
++	CHECK(back.nac_rx == CODEPLUG_NAC_ANY && back.nac_tx == CODEPLUG_NAC_DEFAULT);
++	rec[0x22] = 0x7F; rec[0x23] = 0x0F;	// F7F
++	CHECK(codeplug_openfw_decode(rec, &back) && back.nac_tx == CODEPLUG_NAC_DEFAULT);
++
++	// NXDN: RANs in the tone words, the group in the contact word
++	memset(rec, 0xFF, sizeof(rec));
++	ch.mode = RADIO_MODE_NXDN;
++	ch.nac_rx = 0;		// every RAN
++	ch.nac_tx = 12;
++	ch.talkgroup = 200;
++	ch.dmr_id = 4001;
++	ch.hear_all = false;
++	codeplug_openfw_encode(&ch, rec);
++	CHECK(rec[0x18] == 3);
++	CHECK(codeplug_openfw_decode(rec, &back));
++	CHECK(back.mode == RADIO_MODE_NXDN && back.nac_rx == 0 && back.nac_tx == 12 && back.talkgroup == 200);
++	CHECK(back.dmr_id == 4001 && !back.hear_all);
++	rec[0x22] = 64;	// out of range for a RAN
++	CHECK(codeplug_openfw_decode(rec, &back) && back.nac_tx == 1);
++
++	// P25 trunking: WACN and system ID share the SFR, color code and APRS bytes
++	memset(rec, 0xFF, sizeof(rec));
++	ch.mode = RADIO_MODE_P25_TRUNK;
++	ch.rx_hz = 851012500;
++	ch.tx_hz = 806012500;
++	ch.wacn = 0xBEE00;
++	ch.sysid = 0x3A5;
++	ch.nac_rx = CODEPLUG_NAC_ANY;
++	ch.nac_tx = 0x3A5;
++	ch.talkgroup = 2001;
++	codeplug_openfw_encode(&ch, rec);
++	CHECK(rec[0x18] == 4 && !(rec[0x26] & 0x02));
++	CHECK(codeplug_openfw_decode(rec, &back));
++	CHECK(back.mode == RADIO_MODE_P25_TRUNK && back.wacn == 0xBEE00 && back.sysid == 0x3A5);
++	CHECK(back.sfr_flag1 == 0 && back.color_code == 0 && back.talkgroup == 2001);
++
++	// Back to FM: the record holds tones again
++	ch.mode = RADIO_MODE_FM;
++	ch.rx_tone = (subtone_t){ TONE_CTCSS, 1000 };
++	ch.tx_tone = (subtone_t){ TONE_NONE, 0 };
++	ch.contact = 0;
++	codeplug_openfw_encode(&ch, rec);
++	CHECK(codeplug_openfw_decode(rec, &back));
++	CHECK(back.mode == RADIO_MODE_FM && back.rx_tone.type == TONE_CTCSS && back.rx_tone.value == 1000);
++	CHECK(back.nac_rx == 0 && back.talkgroup == 0 && back.wacn == 0);
++
++	// A mode this firmware doesn't know reads as FM
++	rec[0x18] = 9;
++	CHECK(codeplug_openfw_decode(rec, &back) && back.mode == RADIO_MODE_FM);
++}
++
+ int main(void)
+ {
+ 	image = malloc(IMAGE_SIZE);
+@@ -802,6 +886,7 @@
+ 		return 1;
+ 	}
+ 	test_openfw();
++	test_digital_voice_records();
+ #if CONFIG_APRS
+ 	test_aprs_records();
+ #endif
+--- a/docs/spec/open-firmware-cps.md
++++ b/docs/spec/open-firmware-cps.md
+@@ -416,7 +416,7 @@
+ | 0x00 | 16 | Name, 0xFF padded. A record is empty when its in-use bit is clear |
+ | 0x10 | 4 | RX frequency: BCD of the frequency in 10 Hz units, stored as a LE 32-bit word (438.500 MHz = 43850000 -> 0x43850000 -> bytes 00 00 85 43) |
+ | 0x14 | 4 | TX frequency, same encoding |
+-| 0x18 | 1 | Mode: 0 FM, 1 DMR |
++| 0x18 | 1 | Mode: 0 FM, 1 DMR; the multi-mode derivative adds 2 P25, 3 NXDN, 4 P25 trunking (7.3.3.1). Other values read as FM |
+ | 0x19 | 1 | Power: 0 = use the radio's master power; n = power level n-1. qdmr maps 1 min, 3 low, 6 mid, 9 high, 10 max; the levels themselves are per radio. Radios with 9 or more levels read n as level n-1; radios with fewer spread the scale over their levels (2 levels: 1-5 low, 6-10 high) |
+ | 0x1A | 1 | Fixed location latitude, low byte |
+ | 0x1B | 1 | TX timeout in 15 s units; 0 = the radio's own TX time-out (the TOT setting), which zone sharing's imported channels use |
+@@ -476,6 +476,25 @@
+ 0x7B1C0 + 16 x ((n-129) / 128) + 56 x (n-129). Bitmaps: bit (k % 8) of byte k / 8 marks the bank's channel k (0-based)
+ in use. The flash image from 0x7B000 to 0x7B1AF is unused by the firmware; keep it as read.
+ 
++#### 7.3.3.1 P25, NXDN and P25 trunking channels (multi-mode derivative)
++
++These modes have no tones, color code or contact. The record keeps their fields in those bytes; every other byte
++means what 7.3.3 says (name, frequencies, power, TOT, flags, squelch).
++
++| Offset | P25 (mode 2) | NXDN (mode 3) | P25 trunking (mode 4) |
++| --- | --- | --- | --- |
++| 0x10 / 0x14 | RX / TX frequency | RX / TX frequency | Control channel / its inbound frequency |
++| 0x20 (LE16) | RX NAC 0x000-0xFFF; 0xF7E hears every NAC. Anything else (0xFFFF from an FM CPS) reads as 0xF7E | RX RAN 0-63, 0 hears every RAN; more reads as 0 | RX NAC, as P25 |
++| 0x22 (LE16) | TX NAC 0x000-0xF7D; anything else reads as 0x293 | TX RAN 0-63; more reads as 1 | The system's NAC for inbound |
++| 0x2E (LE16) | Talkgroup: TX target, and the group received | Group ID | Talkgroup for PTT |
++| 0x27-0x29, flag 1 bit 7 | Unit ID (24 bits); unset: the radio's DMR ID | Unit ID (1-65519) | Unit ID assigned by the system administrator |
++| 0x31 bit 6 | Hear every talkgroup (else ours and all call) | Hear every group | Hear every talkgroup |
++| 0x2B | RX group list (unused) | unused | Talkgroups to follow, in priority order (a list's first is the highest) |
++| 0x25, 0x2A, 0x2C, 0x2D | unused | unused | WACN bits 19-12, 11-4, 3-0 (0x2C high nibble); system ID bits 11-8 (0x2C low nibble), 7-0 (0x2D) |
++
++On a trunking channel flag 1 bit 1 (SFR) is cleared: those bytes hold the system. qdmr and the open-firmware CPS know
++modes 0 and 1 only; they keep the bytes of a record they don't edit.
++
+ #### 7.3.4 Zone (EEPROM 0x8030 + 0xB0 x slot)
+ 
+ | Offset | Size | Field |

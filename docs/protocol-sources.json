@@ -104,5 +104,27 @@
     "sha256": "9662ea4b323cad04c48bdf3de161d749d61d9a21c39c3baa719f81fd9e2326f5",
     "pages": 104,
     "license": "Copyright 2015 Tait Limited, all rights reserved; local research reference, not project source"
+  },
+  {
+    "name": "MMDVMHost",
+    "original_url": "https://github.com/g4klx/MMDVMHost",
+    "git_url": "https://github.com/g4klx/MMDVMHost.git",
+    "commit": "6ffa6d354a2c185316201c27c831c766a25a5653",
+    "retrieved_date": "2026-11-13",
+    "local_path": "research/protocol/MMDVMHost",
+    "commit_date": "2026-11-08T16:37:16+00:00",
+    "license": "GPL-2.0-or-later (per-file notices, G4KLX)",
+    "use": "NXDN layer reference and host test oracle"
+  },
+  {
+    "name": "dsd-fme",
+    "original_url": "https://github.com/lwvmobile/dsd-fme",
+    "git_url": "https://github.com/lwvmobile/dsd-fme.git",
+    "commit": "34753963b8855c6c07b79250cb4de4f2c38a4613",
+    "retrieved_date": "2026-11-13",
+    "local_path": "research/protocol/dsd-fme",
+    "commit_date": "2026-11-07T20:22:23-05:00",
+    "license": "ISC (DSD) with GPL-2.0 files; see COPYRIGHT",
+    "use": "independent decoder for host validation only"
   }
 ]

@@ -1,0 +1,218 @@
+{
+  "date": "2026-11-13",
+  "tool": "tools/p25_validate.py",
+  "decoder": {
+    "name": "dsd-fme",
+    "commit": "34753963b8855c6c07b79250cb4de4f2c38a4613",
+    "mbelib": "9a04ed5c78176a9965f3d43f7aa1b1f5330e771f"
+  },
+  "chain": "tests/validation/p25_tx_air.c: synthetic speech -> fixed-point IMBE -> CAI -> 36-byte native PHY blocks (p25_phy_tx_block) -> dibits",
+  "notes": [
+    "nrz: each symbol's level held for a whole symbol (10 samples at 48 kHz): the bit-exact view of what the modem is handed",
+    "rc / c4fm: a raised-cosine pulse / the TIA-102.BAAA-B H(f)P(f) filter; dsd-fme samples symbol centers, so its FEC corrects some symbols of these clean waveforms. This characterizes dsd-fme's demodulator on synthetic shaping, not our bitstream; the radio's waveform comes from the HR_C7000 and needs an RF capture",
+    "dsd-fme counts one 'header error' when the first frame's NAC differs from its initial NAC 0 (dsd_frame.c), not a bit error",
+    "IMBE bit 87 (u7 LSB) carries the alternating pattern src/p25/p25.c writes; the 87 vocoder bits are compared and the pattern checked separately"
+  ],
+  "runs": [
+    {
+      "transmitted": {
+        "phy_blocks": 208,
+        "symbols": 29844,
+        "imbe_frames": 300,
+        "tx_frames": 36,
+        "nac": "293",
+        "talkgroup": 10101,
+        "source": 1234567
+      },
+      "waveform": "c4fm",
+      "snr_db": null,
+      "dsd_fme": {
+        "frames": 35,
+        "hdu": 0,
+        "ldu1": 17,
+        "ldu2": 17,
+        "tdu": 1,
+        "tdulc": 0,
+        "nac": [
+          "293"
+        ],
+        "talkgroups": [
+          10101
+        ],
+        "sources": [
+          1234567
+        ],
+        "audio_errors": 92,
+        "header_errors": 66,
+        "irrecoverable_header_errors": 0,
+        "encrypted": false,
+        "imbe_frames": 306,
+        "imbe_with_corrections": 75,
+        "imbe_matching_ours": 287,
+        "imbe_compared": 300,
+        "u7_lsb_pattern_ok": true
+      },
+      "match": false
+    },
+    {
+      "transmitted": {
+        "phy_blocks": 208,
+        "symbols": 29844,
+        "imbe_frames": 300,
+        "tx_frames": 36,
+        "nac": "293",
+        "talkgroup": 10101,
+        "source": 1234567
+      },
+      "waveform": "c4fm",
+      "snr_db": 20.0,
+      "dsd_fme": {
+        "frames": 36,
+        "hdu": 1,
+        "ldu1": 17,
+        "ldu2": 17,
+        "tdu": 1,
+        "tdulc": 0,
+        "nac": [
+          "293"
+        ],
+        "talkgroups": [
+          10101
+        ],
+        "sources": [
+          1234567
+        ],
+        "audio_errors": 148,
+        "header_errors": 61,
+        "irrecoverable_header_errors": 0,
+        "encrypted": false,
+        "imbe_frames": 306,
+        "imbe_with_corrections": 112,
+        "imbe_matching_ours": 273,
+        "imbe_compared": 300,
+        "u7_lsb_pattern_ok": true
+      },
+      "match": false
+    },
+    {
+      "transmitted": {
+        "phy_blocks": 208,
+        "symbols": 29844,
+        "imbe_frames": 300,
+        "tx_frames": 36,
+        "nac": "293",
+        "talkgroup": 10101,
+        "source": 1234567
+      },
+      "waveform": "nrz",
+      "snr_db": null,
+      "dsd_fme": {
+        "frames": 36,
+        "hdu": 1,
+        "ldu1": 17,
+        "ldu2": 17,
+        "tdu": 1,
+        "tdulc": 0,
+        "nac": [
+          "293"
+        ],
+        "talkgroups": [
+          10101
+        ],
+        "sources": [
+          1234567
+        ],
+        "audio_errors": 0,
+        "header_errors": 1,
+        "irrecoverable_header_errors": 0,
+        "encrypted": false,
+        "imbe_frames": 306,
+        "imbe_with_corrections": 0,
+        "imbe_matching_ours": 300,
+        "imbe_compared": 300,
+        "u7_lsb_pattern_ok": true
+      },
+      "match": true
+    },
+    {
+      "transmitted": {
+        "phy_blocks": 208,
+        "symbols": 29844,
+        "imbe_frames": 300,
+        "tx_frames": 36,
+        "nac": "293",
+        "talkgroup": 10101,
+        "source": 1234567
+      },
+      "waveform": "nrz",
+      "snr_db": 12.0,
+      "dsd_fme": {
+        "frames": 36,
+        "hdu": 1,
+        "ldu1": 17,
+        "ldu2": 17,
+        "tdu": 1,
+        "tdulc": 0,
+        "nac": [
+          "293"
+        ],
+        "talkgroups": [
+          10101
+        ],
+        "sources": [
+          1234567
+        ],
+        "audio_errors": 0,
+        "header_errors": 1,
+        "irrecoverable_header_errors": 0,
+        "encrypted": false,
+        "imbe_frames": 306,
+        "imbe_with_corrections": 0,
+        "imbe_matching_ours": 300,
+        "imbe_compared": 300,
+        "u7_lsb_pattern_ok": true
+      },
+      "match": true
+    },
+    {
+      "transmitted": {
+        "phy_blocks": 208,
+        "symbols": 29844,
+        "imbe_frames": 300,
+        "tx_frames": 36,
+        "nac": "293",
+        "talkgroup": 10101,
+        "source": 1234567
+      },
+      "waveform": "rc",
+      "snr_db": null,
+      "dsd_fme": {
+        "frames": 36,
+        "hdu": 1,
+        "ldu1": 17,
+        "ldu2": 17,
+        "tdu": 1,
+        "tdulc": 0,
+        "nac": [
+          "293"
+        ],
+        "talkgroups": [
+          10101
+        ],
+        "sources": [
+          1234567
+        ],
+        "audio_errors": 17,
+        "header_errors": 16,
+        "irrecoverable_header_errors": 0,
+        "encrypted": false,
+        "imbe_frames": 306,
+        "imbe_with_corrections": 17,
+        "imbe_matching_ours": 296,
+        "imbe_compared": 300,
+        "u7_lsb_pattern_ok": true
+      },
+      "match": false
+    }
+  ]
+}

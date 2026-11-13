@@ -33,7 +33,62 @@ def git(path, *args):
     return subprocess.check_output(["git", "-C", str(path), *args], text=True).strip()
 
 
+# Generated content is staged first: transforms, copied sources, then the
+# patch series in integration/radiofoundry/patches (applied in name order to
+# the staged text, or to the pristine file). flush() writes everything once.
+PATCHES = ROOT / "integration/radiofoundry/patches"
+STAGE = {}
+
+
 def write_owned(path, content, original=None):
+    key = str(path.relative_to(DEST))
+    previous = STAGE.get(key)
+    STAGE[key] = (content, previous[1] if previous else original)
+
+
+def staged(path):
+    return STAGE[str(path.relative_to(DEST))][0]
+
+
+def patch_targets(patch):
+    names = []
+    for line in patch.read_text().splitlines():
+        if line.startswith("+++ "):
+            name = line[4:].split("\t")[0]
+            if name != "/dev/null":
+                names.append(name[2:] if name.startswith("b/") else name)
+    return names
+
+
+def apply_patches(limit=None):
+    """Apply the series (names sorted; stop before `limit`) to the staged tree."""
+    import tempfile
+    for patch in sorted(PATCHES.glob("*.patch")):
+        if limit is not None and patch.name >= limit:
+            break
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            targets = patch_targets(patch)
+            for key in targets:
+                base = STAGE[key][0] if key in STAGE else (UP / key).read_bytes() if (UP / key).exists() else None
+                if base is not None:
+                    (tmp / key).parent.mkdir(parents=True, exist_ok=True)
+                    (tmp / key).write_bytes(base)
+            result = subprocess.run(["patch", "-p1", "-s", "-f", "--no-backup-if-mismatch", "-d", str(tmp), "-i", str(patch)],
+                                    capture_output=True, text=True)
+            if result.returncode:
+                raise SystemExit(f"Patch does not apply: {patch.name}\n{result.stdout}{result.stderr}")
+            for key in targets:
+                original = STAGE[key][1] if key in STAGE else (UP / key).read_bytes() if (UP / key).exists() else None
+                STAGE[key] = ((tmp / key).read_bytes(), original)
+
+
+def flush():
+    for key, (content, original) in sorted(STAGE.items()):
+        _write_file(DEST / key, content, original)
+
+
+def _write_file(path, content, original=None):
     key = str(path.relative_to(DEST))
     if (path.exists() and path.read_bytes() not in (content, original) and
         hashlib.sha256(path.read_bytes()).hexdigest() != OWNED.get(key)):
@@ -54,7 +109,7 @@ def transform(relative, replacements):
     write_owned(DEST / relative, content.encode(), original)
 
 
-def prepare():
+def prepare(write=True, apply_series=True, limit=None):
     if not UP.exists():
         run(["git", "clone", "--no-checkout", "https://github.com/RadioFoundry/RadioFoundry", UP])
         run(["git", "-C", UP, "checkout", "--detach", PIN])
@@ -106,9 +161,9 @@ def prepare():
         ('\t.spk_pending = hrc_audio_pcm_spk_pending,', '\t.spk_pending = hrc_audio_pcm_spk_pending,\n#if CONFIG_P25\n\t.playback_pace = playback_pace,\n\t.playback_stats = playback_stats,\n#endif'),
     ])
     write_owned(DEST / "platform/hrc7000/pcm_playback.inc", (ROOT / "integration/radiofoundry/pcm_playback.inc").read_bytes())
-    transform("boards/dm32/board.c", [(".radio = &dm32_radio,", ".radio = &dm32_radio,\n#if CONFIG_P25_NATIVE\n\t.native_modem = &dm32_native_ops,\n#endif\n#if CONFIG_DEV_TX\n\t.native_mic_route = dm32_native_mic_route,\n#endif"),
+    transform("boards/dm32/board.c", [(".radio = &dm32_radio,", ".radio = &dm32_radio,\n#if CONFIG_P25_NATIVE\n\t.native_modem = &dm32_native_ops,\n#endif\n#if CONFIG_P25_NATIVE\n\t.native_mic_route = dm32_native_mic_route,\n#endif"),
         ('#include "pins.h"', '#include "pins.h"\n#include "dm32_firstboot.inc"')])
-    transform("boards/dm32/dm32.h", [("#include <stdbool.h>", "#include <stdbool.h>\n#if CONFIG_P25_NATIVE\n#include \"native_test.h\"\nextern nt_ops dm32_native_ops;\n#endif\n#if CONFIG_DEV_TX\nvoid dm32_native_mic_route(bool on);\n#endif")])
+    transform("boards/dm32/dm32.h", [("#include <stdbool.h>", "#include <stdbool.h>\n#if CONFIG_P25_NATIVE\n#include \"native_test.h\"\nextern nt_ops dm32_native_ops;\n#endif\n#if CONFIG_P25_NATIVE\nvoid dm32_native_mic_route(bool on);\n#endif")])
     transform("boards/dm32/radio_dm32.c", [
         ("static void pa_key(void)\n{", "static void pa_key(void)\n{\n#if CONFIG_FIRSTBOOT\n\tif (!firstboot_tx_allowed(FB_PA_KEY)) { firstboot_deny(FB_PA_KEY); board_rf_safe(); return; }\n#endif"),
         ("static void dmr_rf_switch(bool tx)\n{", "static void dmr_rf_switch(bool tx)\n{\n#if CONFIG_FIRSTBOOT\n\tif (tx && !firstboot_tx_allowed(FB_RF_SWITCH)) { firstboot_deny(FB_RF_SWITCH); board_rf_safe(); return; }\n#endif"),
@@ -118,7 +173,7 @@ def prepare():
     ])
     # Append board glue while preserving ownership checks on generated files.
     board_path=DEST / "boards/dm32/radio_dm32.c"
-    board_body=board_path.read_bytes()
+    board_body=staged(board_path)
     write_owned(board_path,board_body+b'\n#include "dm32_native.inc"\n',board_body)
     transform("platform/hrc7000/gpio.c", [
         ('#include "platform.h"', '#include "platform.h"\n#include "config.h"'),
@@ -170,7 +225,7 @@ def prepare():
     # Reserve the worker's actual stack: 8 KiB bench / 4 KiB receive-only.
     # Keep the AMBE code/table windows and full-resolution framebuffer intact.
     transform("boards/dm32/freertos_board.h", [("#define configTOTAL_HEAP_SIZE\t(32 * 1024 + 512)",
-        "#if CONFIG_P25 && (CONFIG_P25_BENCH || CONFIG_DEV_TX)\n#define configTOTAL_HEAP_SIZE (40 * 1024 + 512)\n#elif CONFIG_P25\n#define configTOTAL_HEAP_SIZE (36 * 1024 + 512)\n#else\n#define configTOTAL_HEAP_SIZE (32 * 1024 + 512)\n#endif")])
+        "#if CONFIG_P25 && (CONFIG_P25_BENCH || CONFIG_P25_NATIVE)\n#define configTOTAL_HEAP_SIZE (40 * 1024 + 512)\n#elif CONFIG_P25\n#define configTOTAL_HEAP_SIZE (36 * 1024 + 512)\n#else\n#define configTOTAL_HEAP_SIZE (32 * 1024 + 512)\n#endif")])
     for p in sorted((ROOT / "src/p25").glob("*")):
         if p.suffix in (".c", ".h", ".inc"):
             write_owned(DEST / "core/p25" / p.name, p.read_bytes())
@@ -194,6 +249,11 @@ def prepare():
         "Not an upstream MIT-only contribution. See COPYING-P25 and source manifest.\n"
         "Hardware-unverified. Bounded native-PHY tests; no operational P25 voice mode.\n"
     ).encode())
+    if apply_series:
+        apply_patches(limit)
+    if not write:
+        return
+    flush()
     OWNED_FILE.write_text(json.dumps(OWNED, indent=2) + "\n")
     changed=subprocess.check_output(["git","-C",str(DEST),"diff","--name-only","-z","HEAD"]).decode().split("\0")
     extra=subprocess.check_output(["git","-C",str(DEST),"ls-files","--others","--exclude-standard","-z"]).decode().split("\0")

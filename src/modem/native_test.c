@@ -111,10 +111,9 @@ int nt_arm_voice(nt_test *t,uint32_t hz,uint32_t ms)
                  .mode=NT_RECEIVE,.p25_sync=1,.audio=1};
     return arm(t,&c,0,1);
 }
-#if defined(CONFIG_DEV_TX) && CONFIG_DEV_TX
-int nt_arm_live(nt_test *t,uint32_t hz)
+int nt_arm_live(nt_test *t,uint32_t hz,uint8_t power)
 {
-    nt_config c={.frequency_hz=hz,.lease_ms=250,.mode=NT_TRANSMIT,.p25_sync=1,.audio=1};
+    nt_config c={.frequency_hz=hz,.lease_ms=250,.mode=NT_TRANSMIT,.p25_sync=1,.audio=1,.power=power};
     return arm(t,&c,1,1);
 }
 int nt_arm_live_rx(nt_test *t,uint32_t hz)
@@ -129,7 +128,6 @@ int nt_live_seal(nt_test *t,uint32_t sid)
     t->config.blocks=t->stats.tx_loaded;
     return 1;
 }
-#endif
 int nt_load(nt_test *t, uint32_t sid, uint32_t index, const uint8_t raw[36])
 {
     unsigned capacity=nt_tx_preloaded(&t->config) ? NT_TX_STORAGE_CAP : NT_TX_CAP;
@@ -248,16 +246,20 @@ void nt_boundary(nt_test *t, uint8_t source, uint32_t now)
     if (!active(t)) { t->stats.ignored_irqs++; return; }
     nt_tick(t,now); if (!active(t)) return;
     if (t->state==NT_RX) return;
-#if defined(CONFIG_DEV_TX) && CONFIG_DEV_TX
-    /* Physical PTT starts and strobes on the TX slot vector. The HRC port
-     * uses PHY_RDY to stage subsequent buffers without advancing this queue. */
-    if (nt_tx_live(&t->config) && source!=NT_IRQ_TX_SLOT) { t->stats.duplicate_irqs++;return; }
-#endif
-    /* Slot vectors and PHY_RDY have different phases on the actual DM32.
-     * Keep the first source for this run; other notifications neither advance
-     * the buffer nor renew its stall clock. Same-source timing limits remain. */
-    if (t->boundary_seen && source!=t->boundary_source) {
-        t->stats.duplicate_irqs++;return;
+    /* TX hands blocks over only in PHY_RDY. PHY_RDY is the first interrupt
+     * of every slot; the modem fetches the head of TX RAM for the coming slot
+     * within about 0.4 ms of it. The 2026-11-06 traces wrote on the TX-slot
+     * vector 0.43-0.45 ms after PHY_RDY and the first three bytes of every
+     * block went out from the previous block. Slot vectors only supervise:
+     * one that arrives more than half a slot after the last PHY_RDY means
+     * this slot's PHY_RDY was lost, and a late write would send a mixed
+     * block, so the run stops instead. */
+    if (source!=NT_IRQ_PHY) {
+        t->stats.duplicate_irqs++;
+        if (source==NT_IRQ_TX_SLOT && t->state==NT_TX && t->boundary_seen &&
+            (uint32_t)(now-t->boundary_us)>NT_TX_SLOT_LAG_US)
+            finish(t,NT_LATE,1);
+        return;
     }
     if (t->boundary_seen) {
         uint32_t gap=now-t->boundary_us;
@@ -275,6 +277,7 @@ void nt_boundary(nt_test *t, uint8_t source, uint32_t now)
     nt_block *b=&t->tx[t->tx_tail];
     if (b->index!=t->stats.tx_sent || !t->ops->write(t->ops->ctx,b->raw)) { finish(t,NT_IO,1); return; }
 #if defined(CONFIG_DEV_TX) && CONFIG_DEV_TX
+    nt_trace_stage(t,now); /* trace v2: first/total PHY_RDY handoffs */
     if (tracing(t) && tx_trace.count<NT_TRACE_BLOCKS) {
         unsigned i=tx_trace.count++;
         tx_trace.blocks[i].us=now;tx_trace.blocks[i].queued=t->tx_count;
