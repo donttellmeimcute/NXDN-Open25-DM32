@@ -1,0 +1,401 @@
+--- a/site/static/js/codeplug/records.js
++++ b/site/static/js/codeplug/records.js
+@@ -45,6 +45,31 @@
+ 
+ // --- Channels (7.3.3) ---
+ 
++// Mode byte (7.3.3): 0 FM, 1 DMR; the multi-mode derivative adds P25, NXDN and P25 trunking (7.3.3.1)
++export const CHANNEL_MODES = ["fm", "dmr", "p25", "nxdn", "p25trunk"];
++export const DIGITAL_VOICE = new Set(["p25", "nxdn", "p25trunk"]);
++export const NAC_ANY = 0xF7E;		// RX NAC that hears every NAC
++export const NAC_DEFAULT = 0x293;
++
++// P25 / NXDN / trunking fields (7.3.3.1), as core/codeplug/codeplug.c reads them; blank words read as the defaults
++function decodeDigital(r, mode) {
++	const nxdn = mode === "nxdn";
++	const max = nxdn ? 63 : 0xFFF;
++	const rx = u16(r, 0x20), tx = u16(r, 0x22);
++	const out = {
++		nacRx: rx <= max ? rx : nxdn ? 0 : NAC_ANY,
++		nacTx: tx <= max && (nxdn || tx < NAC_ANY) ? tx : nxdn ? 1 : NAC_DEFAULT,
++		talkgroup: u16(r, 0x2E),
++		hearAll: (r[0x31] & 0x40) !== 0,
++		wacn: 0, sysid: 0,
++	};
++	if (mode === "p25trunk") {
++		out.wacn = (r[0x25] << 12) | (r[0x2A] << 4) | (r[0x2C] >> 4);
++		out.sysid = ((r[0x2C] & 0x0F) << 8) | r[0x2D];
++	}
++	return out;
++}
++
+ // Power byte: 0 = the radio's master power, n = level n - 1. qdmr's names for the levels it writes
+ export const POWER_NAMES = { 0: "Default", 1: "Min", 3: "Low", 6: "Mid", 9: "High", 10: "Max" };
+ 
+@@ -63,10 +88,21 @@
+ 	if (rxHz === null || txHz === null) return null;
+ 	const l1 = r[0x26], f1 = r[0x30], f4 = r[0x33];
+ 	const hasLoc = (l1 & 0x08) !== 0;
++	const mode = CHANNEL_MODES[r[0x18]] || "fm";
++	if (DIGITAL_VOICE.has(mode)) {
++		const c = decodeChannelFields(r, rxHz, txHz, l1, f1, f4, hasLoc, mode);
++		return { ...c, ...decodeDigital(r, mode), rxTone: "", txTone: "", contact: 0, timeslot: 1, colorCode: 0,
++			aprs: mode === "p25trunk" ? 0 : c.aprs, sfr: false, sfrA: 0, sfrB: 0 };
++	}
++	return { ...decodeChannelFields(r, rxHz, txHz, l1, f1, f4, hasLoc, mode), nacRx: NAC_DEFAULT, nacTx: NAC_DEFAULT,
++		talkgroup: 0, hearAll: false, wacn: 0, sysid: 0 };
++}
++
++function decodeChannelFields(r, rxHz, txHz, l1, f1, f4, hasLoc, mode) {
+ 	return {
+ 		name: getName(r, 0, 16),
+ 		rxHz, txHz,
+-		mode: r[0x18] === 1 ? "dmr" : "fm",
++		mode,
+ 		power: r[0x19],
+ 		tot: r[0x1B] * 15,
+ 		rxTone: getTone(r, 0x20),
+@@ -104,7 +140,7 @@
+ 	putName(r, 0, 16, c.name);
+ 	putFreq(r, 0x10, c.rxHz);
+ 	putFreq(r, 0x14, c.txHz);
+-	r[0x18] = c.mode === "dmr" ? 1 : 0;
++	r[0x18] = Math.max(0, CHANNEL_MODES.indexOf(c.mode));
+ 	r[0x19] = clamp(c.power, 0, 255);
+ 	r[0x1B] = clamp(Math.ceil((c.tot || 0) / 15), 0, 255);
+ 	putTone(r, 0x20, c.rxTone);
+@@ -139,6 +175,20 @@
+ 	}
+ 	r[0x25] = c.sfrA & 0xFF;
+ 	r[0x2A] = c.sfrB & 0xFF;
++	if (DIGITAL_VOICE.has(c.mode)) {
++		put16(r, 0x20, c.nacRx ?? NAC_ANY);
++		put16(r, 0x22, c.nacTx ?? NAC_DEFAULT);
++		put16(r, 0x2E, c.talkgroup || 0);
++		r[0x31] = (r[0x31] & ~0x40) | (c.hearAll ? 0x40 : 0);
++		r[0x2C] = 0;
++		if (c.mode === "p25trunk") {
++			r[0x25] = (c.wacn >> 12) & 0xFF;
++			r[0x2A] = (c.wacn >> 4) & 0xFF;
++			r[0x2C] = ((c.wacn & 0x0F) << 4) | ((c.sysid >> 8) & 0x0F);
++			r[0x2D] = c.sysid & 0xFF;
++			r[0x26] &= ~0x02;
++		}
++	}
+ 	return r;
+ }
+ 
+--- a/site/static/js/codeplug/csv.js
++++ b/site/static/js/codeplug/csv.js
+@@ -7,7 +7,7 @@
+ // {row, column, code, params}, and the page words them.
+ 
+ import { parseFreq, parseTone, mhz } from "./fields.js";
+-import { LIMITS, POWER_NAMES, CALL_TYPES, validDtmf } from "./records.js";
++import { LIMITS, POWER_NAMES, CALL_TYPES, validDtmf, NAC_ANY } from "./records.js";
+ import { newChannel, newContact, remove, assignNumbers } from "./model.js";
+ 
+ // --- RFC 4180 ---
+@@ -145,7 +145,27 @@
+ 
+ const POWER = { ...POWER_NAMES };
+ const powerText = (n) => POWER_NAMES[n] || String(n);
+-const MODES = { fm: "FM", dmr: "DMR" };
++const MODES = { fm: "FM", dmr: "DMR", p25: "P25", nxdn: "NXDN", p25trunk: "P25 Trunk" };
++
++// P25 and NXDN fields (open-firmware-cps.md 7.3.3.1): a cell left blank keeps the value, so a P25 column on an FM
++// row and the other way round change nothing
++const DIGITAL = new Set(["p25", "nxdn", "p25trunk"]);
++const isP25 = (r) => r.mode === "p25" || r.mode === "p25trunk";
++const hex = (digits) => (v) => v.toString(16).toUpperCase().padStart(digits, "0");
++const asHex = (max, any) => (s) => {
++	s = s.trim();
++	if (any && /^any$/i.test(s)) return NAC_ANY;
++	if (!/^(0x)?[0-9a-f]+$/i.test(s)) throw new Bad("bad_value", { value: s, allowed: any ? "000-FFF, any" : `0-${max.toString(16).toUpperCase()}` });
++	const n = parseInt(s.replace(/^0x/i, ""), 16);
++	if (n > max) throw new Bad("range", { min: 0, max: max.toString(16).toUpperCase() });
++	return n;
++};
++const keep = (header, key, put, get, aliases = []) => ({
++	header, aliases, key, get,
++	set: (r, s) => {
++		if (s.trim() !== "") r[key] = put(s);
++	},
++});
+ const TYPES = Object.fromEntries(CALL_TYPES.map((k) => [k, k[0].toUpperCase() + k.slice(1)]));
+ 
+ // --- References by name ---
+@@ -313,7 +333,7 @@
+ 			ref("TX Contact", "contact", "contacts", ["Contact"]),
+ 			ref("RX Group List", "rxList", "rxLists", ["Group List", "RX List"]),
+ 			ref("APRS", "aprs", "aprs", ["APRS Configuration"]),
+-			c("DMR ID", "dmrId", asId, (r) => r.dmrId || "", ["Channel DMR ID"]),
++			c("DMR ID", "dmrId", asId, (r) => r.dmrId || "", ["Channel DMR ID", "Unit ID", "Radio ID"]),
+ 			c("RX Only", "rxOnly", asBool, (r) => yesNo(r.rxOnly)),
+ 			c("All Skip", "allSkip", asBool, (r) => yesNo(r.allSkip), ["Scan Skip"]),
+ 			c("Zone Skip", "zoneSkip", asBool, (r) => yesNo(r.zoneSkip)),
+@@ -330,6 +350,18 @@
+ 			c("SFR", "sfr", asBool, (r) => yesNo(r.sfr)),
+ 			c("SFR A", "sfrA", asInt(0, 255, 0)),
+ 			c("SFR B", "sfrB", asInt(0, 255, 0)),
++			keep("RX NAC", "nacRx", asHex(0xFFF, true), (r) => (isP25(r) ? (r.nacRx === NAC_ANY ? "any" : hex(3)(r.nacRx)) : ""), ["NAC RX"]),
++			keep("TX NAC", "nacTx", (s) => {
++				const n = asHex(0xFFF, false)(s);
++				if (n >= NAC_ANY) throw new Bad("range", { min: 0, max: "F7D" });
++				return n;
++			}, (r) => (isP25(r) ? hex(3)(r.nacTx) : ""), ["NAC TX", "NAC"]),
++			keep("RX RAN", "nacRx", asInt(0, 63), (r) => (r.mode === "nxdn" ? r.nacRx : ""), ["RAN RX"]),
++			keep("TX RAN", "nacTx", asInt(0, 63), (r) => (r.mode === "nxdn" ? r.nacTx : ""), ["RAN TX", "RAN"]),
++			keep("Talkgroup", "talkgroup", asInt(1, 65535), (r) => (DIGITAL.has(r.mode) ? r.talkgroup || "" : ""), ["TG", "Group ID", "TGID"]),
++			keep("Hear All Groups", "hearAll", asBool, (r) => (DIGITAL.has(r.mode) ? yesNo(r.hearAll) : ""), ["Hear All", "Monitor All"]),
++			keep("WACN", "wacn", asHex(0xFFFFF, false), (r) => (r.mode === "p25trunk" ? hex(5)(r.wacn) : "")),
++			keep("System ID", "sysid", asHex(0xFFF, false), (r) => (r.mode === "p25trunk" ? hex(3)(r.sysid) : ""), ["SysID", "System"]),
+ 		],
+ 		create: () => newChannel(),
+ 		required: ["name", "rxHz"],
+--- a/site/static/js/codeplug/model.js
++++ b/site/static/js/codeplug/model.js
+@@ -239,6 +239,7 @@
+ 		txTone: "", bw: 12.5, rxOnly: false, allSkip: false, zoneSkip: false, vox: false, squelch: 0, colorCode: 1,
+ 		timeslot: 1, contact: null, rxList: null, aprs: null, dmrId: 0, noBeep: false, noEco: false, dmo: false,
+ 		roam: false, aliasTs1: 0, aliasTs2: 0, useLocation: false, lat: 0, lon: 0, sfr: false, sfrA: 0, sfrB: 0,
++		nacRx: 0x293, nacTx: 0x293, talkgroup: 0, hearAll: false, wacn: 0, sysid: 0,
+ 		...fields,
+ 	};
+ }
+--- a/site/static/js/editor/views.js
++++ b/site/static/js/editor/views.js
+@@ -56,7 +56,32 @@
+ const listening = (value) => !!listenBand(parseFreq(value("rxHz")));
+ 
+ // The mode as the radio shows it: an FM channel in the air band is received in AM
+-const modeText = (r, t) => (r.mode === "dmr" ? "DMR" : listenBand(r.rxHz) ? t(`editor.mode.${listenBand(r.rxHz)}`) : "FM");
++const MODE_NAMES = { dmr: "DMR", p25: "P25", nxdn: "NXDN", p25trunk: "P25 Trunk" };
++const MODE_OPTIONS = () => [["fm", "FM"], ["dmr", "DMR"], ["p25", "P25"], ["nxdn", "NXDN"], ["p25trunk", "P25 Trunk"]];
++const modeText = (r, t) => MODE_NAMES[r.mode] || (listenBand(r.rxHz) ? t(`editor.mode.${listenBand(r.rxHz)}`) : "FM");
++const DIGITAL = new Set(["p25", "nxdn", "p25trunk"]);
++const P25 = new Set(["p25", "p25trunk"]);
++
++// P25 NAC (hex, 0xF7E = any) and NXDN RAN (0-63)
++const hexText = (digits) => (v) => (v ?? 0).toString(16).toUpperCase().padStart(digits, "0");
++const nacText = (v) => (v === 0xF7E ? "any" : hexText(3)(v));
++const hexField = (max, any, err) => (t) => (r, k, v) => {
++	const s = String(v ?? "").trim();
++	if (any && /^any$/i.test(s)) {
++		r[k] = 0xF7E;
++		return;
++	}
++	if (!/^(0x)?[0-9a-f]+$/i.test(s)) return t(err);
++	const n = parseInt(s.replace(/^0x/i, ""), 16);
++	if (n > max) return t(err);
++	r[k] = n;
++};
++const nac = (any) => (t) => (r, k, v) => {
++	if (r.mode === "nxdn") return int(0, 63)(t)(r, k, v);
++	const err = hexField(any ? 0xFFF : 0xF7D, any, "editor.err.nac")(t)(r, k, v);
++	return err;
++};
++const nacFormat = (v, r) => (r.mode === "nxdn" ? String(v) : nacText(v));
+ 
+ const tone = (t) => (r, k, v) => {
+ 	const s = parseTone(v);
+@@ -111,6 +136,11 @@
+ 		readOnly: !parse,
+ 		...extra,
+ 	});
++	// a column of the digital voice modes only (P25, NXDN, trunking), blank and locked elsewhere
++	const digital = (c) => {
++		const format = c.format;
++		return { ...c, readOnly: (r) => !DIGITAL.has(r.mode), format: (v, r) => (!DIGITAL.has(r.mode) ? "" : format ? format(v, r) : v) };
++	};
+ 	// a column of one mode only: blank and locked on a channel of the other mode (its value is kept)
+ 	const only = (mode, c) => {
+ 		const format = c.format;
+@@ -122,7 +152,7 @@
+ 		return [
+ 			num,
+ 			col("name", "editor.col.name", "text", name(LIMITS.name)(t)),
+-			col("mode", "editor.col.mode", "select", pick, { options: () => [["fm", "FM"], ["dmr", "DMR"]], format: (v, r) => modeText(r, t) }),
++			col("mode", "editor.col.mode", "select", pick, { options: MODE_OPTIONS, format: (v, r) => modeText(r, t) }),
+ 			col("rxHz", "editor.col.rx", "text", (r, k, v) => {
+ 				// a simplex channel stays simplex: TX follows RX when they were the same
+ 				const was = r.rxHz;
+@@ -139,6 +169,9 @@
+ 			only("dmr", col("timeslot", "editor.col.ts", "select", pick, { options: () => [[1, "1"], [2, "2"]] })),
+ 			only("dmr", col("contact", "editor.col.contact", "select", pick, { options: () => refOptions(m.contacts, t), format: (v) => refLabel(v, t), sortValue: (r) => refLabel(r.contact, t) })),
+ 			only("dmr", col("rxList", "editor.col.rx_list", "select", pick, { options: () => refOptions(m.rxLists, t), format: (v) => refLabel(v, t), sortValue: (r) => refLabel(r.rxList, t) })),
++			digital(col("nacRx", "editor.col.nac_rx", "text", nac(true)(t), { format: nacFormat, editValue: (v, r) => nacFormat(v, r) })),
++			digital(col("nacTx", "editor.col.nac_tx", "text", nac(false)(t), { format: nacFormat, editValue: (v, r) => nacFormat(v, r) })),
++			digital(col("talkgroup", "editor.col.talkgroup", "text", int(1, 65535)(t), { numeric: true })),
+ 			col("rxOnly", "editor.col.rx_only", "bool", bool),
+ 			col("zoneSkip", "editor.col.zone_skip", "bool", bool),
+ 		];
+@@ -222,11 +255,12 @@
+ 	// the FM and DMR parts show only for a channel of that mode; the other mode's values are kept as they are
+ 	const fm = (f) => ({ ...f, show: (r) => r.mode === "fm" });
+ 	const dmr = (f) => ({ ...f, show: (r) => r.mode === "dmr" && (!f.show || f.show(r)) });
++	const dv = (f) => ({ ...f, show: (r) => DIGITAL.has(r.mode) && (!f.show || f.show(r)) });
+ 	const sfr = (f, label, options) => dmr({ ...sfrField(...f), label: t(label), type: "select", options, show: (r) => r.sfr });
+ 	return [
+ 		{ group: t("editor.form.basic") },
+ 		txt("name", "editor.col.name", name(LIMITS.name)(t)),
+-		sel("mode", "editor.col.mode", () => [["fm", "FM"], ["dmr", "DMR"]]),
++		sel("mode", "editor.col.mode", MODE_OPTIONS),
+ 		sel("power", "editor.col.power", () => powerOptions(t)),
+ 		// in a receive-only band TX follows RX, locked (rxFreq)
+ 		{ type: "pair", key: "freqs", disabled: (w, value) => listening(value),
+@@ -258,6 +292,16 @@
+ 		dmr(sel("aliasTs1", "editor.col.alias_ts1", () => aliasOptions(t))),
+ 		dmr(sel("aliasTs2", "editor.col.alias_ts2", () => aliasOptions(t))),
+ 		dmr(chk("noBeep", "editor.col.no_beep")),
++		dv({ group: t("editor.form.dv") }),
++		dv({ ...txt("nacRx", "editor.col.nac_rx", nac(true)(t), (v) => nacText(v)), show: (r) => P25.has(r.mode) }),
++		dv({ ...txt("nacTx", "editor.col.nac_tx", nac(false)(t), (v) => nacText(v)), show: (r) => P25.has(r.mode) }),
++		dv({ ...txt("nacRx", "editor.col.ran_rx", nac(true)(t), (v) => String(v)), key: "nacRx", show: (r) => r.mode === "nxdn" }),
++		dv({ ...txt("nacTx", "editor.col.ran_tx", nac(false)(t), (v) => String(v)), key: "nacTx", show: (r) => r.mode === "nxdn" }),
++		dv(txt("talkgroup", "editor.col.talkgroup", int(1, 65535)(t), (v) => (v ? String(v) : ""))),
++		dv(txt("dmrId", "editor.col.unit_id", dmrId(t), (v) => (v ? String(v) : ""))),
++		dv(chk("hearAll", "editor.col.hear_all")),
++		dv({ ...txt("wacn", "editor.col.wacn", hexField(0xFFFFF, false, "editor.err.wacn")(t), hexText(5)), show: (r) => r.mode === "p25trunk" }),
++		dv({ ...txt("sysid", "editor.col.sysid", hexField(0xFFF, false, "editor.err.sysid")(t), hexText(3)), show: (r) => r.mode === "p25trunk" }),
+ 		{ group: t("editor.form.scan") },
+ 		chk("zoneSkip", "editor.col.zone_skip"),
+ 		chk("allSkip", "editor.col.all_skip"),
+--- a/site/i18n/en.json
++++ b/site/i18n/en.json
+@@ -1860,5 +1860,18 @@
+  "flash.backup.failed": "The backup stopped before it finished, and nothing was saved. {error}",
+  "flash.backup.retry_how": "Choose Try Again to start the backup over. If it stops again, turn the radio off and on, wait for its home screen, and try again. If it keeps stopping, choose Calibration only so that at least the factory calibration is saved, and report the problem.",
+  "flash.backup.retry_how_small": "Choose Try Again. If it stops again, turn the radio off and on, wait for its home screen, and try again. If it keeps stopping, report the problem.",
+- "flash.backup.after_channels": "After the backup, the installer converts the original channels, zones and contacts for RadioFoundry and writes them to the radio. The backup keeps the original codeplug. Without a backup, it asks before writing them."
++ "flash.backup.after_channels": "After the backup, the installer converts the original channels, zones and contacts for RadioFoundry and writes them to the radio. The backup keeps the original codeplug. Without a backup, it asks before writing them.",
++ "editor.col.nac_rx": "RX NAC",
++ "editor.col.nac_tx": "TX NAC",
++ "editor.col.ran_rx": "RX RAN",
++ "editor.col.ran_tx": "TX RAN",
++ "editor.col.talkgroup": "Talkgroup",
++ "editor.col.unit_id": "Unit ID",
++ "editor.col.hear_all": "Hear all groups",
++ "editor.col.wacn": "WACN",
++ "editor.col.sysid": "System ID",
++ "editor.form.dv": "P25 / NXDN",
++ "editor.err.nac": "NAC: hex 000-FFF (TX up to F7D), or any for RX",
++ "editor.err.wacn": "WACN: hex 00000-FFFFF",
++ "editor.err.sysid": "System ID: hex 000-FFF"
+ }
+--- a/site/i18n/es.json
++++ b/site/i18n/es.json
+@@ -1860,5 +1860,18 @@
+  "flash.backup.failed": "La copia de seguridad se detuvo antes de terminar y no se guardó nada. {error}",
+  "flash.backup.retry_how": "Elige Reintentar para empezar la copia de nuevo. Si vuelve a detenerse, apaga y enciende la radio, espera a su pantalla de inicio y vuelve a intentarlo. Si sigue deteniéndose, elige Solo calibración para guardar al menos la calibración de fábrica, e informa del problema.",
+  "flash.backup.retry_how_small": "Elige Reintentar. Si vuelve a detenerse, apaga y enciende la radio, espera a su pantalla de inicio y vuelve a intentarlo. Si sigue deteniéndose, informa del problema.",
+- "flash.backup.after_channels": "Después de la copia de seguridad, el instalador convierte los canales, zonas y contactos originales al formato de RadioFoundry y los escribe en la radio. La copia de seguridad conserva el codeplug original. Si no se hace copia de seguridad, pregunta antes de escribirlos."
++ "flash.backup.after_channels": "Después de la copia de seguridad, el instalador convierte los canales, zonas y contactos originales al formato de RadioFoundry y los escribe en la radio. La copia de seguridad conserva el codeplug original. Si no se hace copia de seguridad, pregunta antes de escribirlos.",
++ "editor.col.nac_rx": "NAC RX",
++ "editor.col.nac_tx": "NAC TX",
++ "editor.col.ran_rx": "RAN RX",
++ "editor.col.ran_tx": "RAN TX",
++ "editor.col.talkgroup": "Grupo",
++ "editor.col.unit_id": "ID de unidad",
++ "editor.col.hear_all": "Oír todos los grupos",
++ "editor.col.wacn": "WACN",
++ "editor.col.sysid": "ID de sistema",
++ "editor.form.dv": "P25 / NXDN",
++ "editor.err.nac": "NAC: hex 000-FFF (TX hasta F7D), o any en RX",
++ "editor.err.wacn": "WACN: hex 00000-FFFFF",
++ "editor.err.sysid": "ID de sistema: hex 000-FFF"
+ }
+--- a/site/i18n/it.json
++++ b/site/i18n/it.json
+@@ -1860,5 +1860,18 @@
+  "flash.backup.failed": "Il backup si è interrotto prima di finire e non è stato salvato nulla. {error}",
+  "flash.backup.retry_how": "Scegli Riprova per ricominciare il backup. Se si interrompe di nuovo, spegni e riaccendi la radio, attendi la schermata principale e riprova. Se continua a interrompersi, scegli Solo calibrazione per salvare almeno la calibrazione di fabbrica, e segnala il problema.",
+  "flash.backup.retry_how_small": "Scegli Riprova. Se si interrompe di nuovo, spegni e riaccendi la radio, attendi la schermata principale e riprova. Se continua a interrompersi, segnala il problema.",
+- "flash.backup.after_channels": "Dopo il backup, l'installatore converte i canali, le zone e i contatti originali per RadioFoundry e li scrive nella radio. Il backup conserva il codeplug originale. Senza backup, chiede prima di scriverli."
++ "flash.backup.after_channels": "Dopo il backup, l'installatore converte i canali, le zone e i contatti originali per RadioFoundry e li scrive nella radio. Il backup conserva il codeplug originale. Senza backup, chiede prima di scriverli.",
++ "editor.col.nac_rx": "NAC RX",
++ "editor.col.nac_tx": "NAC TX",
++ "editor.col.ran_rx": "RAN RX",
++ "editor.col.ran_tx": "RAN TX",
++ "editor.col.talkgroup": "Gruppo",
++ "editor.col.unit_id": "ID unità",
++ "editor.col.hear_all": "Ascolta tutti i gruppi",
++ "editor.col.wacn": "WACN",
++ "editor.col.sysid": "ID sistema",
++ "editor.form.dv": "P25 / NXDN",
++ "editor.err.nac": "NAC: hex 000-FFF (TX fino a F7D), o any in RX",
++ "editor.err.wacn": "WACN: hex 00000-FFFFF",
++ "editor.err.sysid": "ID sistema: hex 000-FFF"
+ }
+--- a/site/tests/csv.test.mjs
++++ b/site/tests/csv.test.mjs
+@@ -167,3 +167,56 @@
+ 	assert.equal(detect("Foo,Bar\n1,2\n"), null);
+ 	assert.throws(() => importTable(m, "Foo,Bar\n1,2\n"), { code: "not_a_table" });
+ });
++
++// P25, NXDN and P25 trunking channels (open-firmware-cps.md 7.3.3.1; the multi-mode derivative)
++test("digital voice channels: record layout, CSV round trip, blank cells keep values", async () => {
++	const { encodeChannel, decodeChannel, blankChannel } = await import("../static/js/codeplug/records.js");
++	const p25 = newChannel({ name: "P25 Ops", rxHz: 155475000, txHz: 155475000, mode: "p25", nacRx: 0xF7E, nacTx: 0x293,
++		talkgroup: 10101, hearAll: true, dmrId: 1234567 });
++	const r = encodeChannel(p25, blankChannel());
++	assert.equal(r[0x18], 2);
++	assert.deepEqual([...r.slice(0x20, 0x24)], [0x7E, 0x0F, 0x93, 0x02]);
++	assert.deepEqual([...r.slice(0x2E, 0x30)], [10101 & 0xFF, 10101 >> 8]);
++	assert.equal(r[0x26] & 0x80, 0x80);
++	assert.equal(r[0x31] & 0x40, 0x40);
++	const back = decodeChannel(r);
++	assert.equal(back.mode, "p25");
++	assert.equal(back.nacRx, 0xF7E);
++	assert.equal(back.nacTx, 0x293);
++	assert.equal(back.talkgroup, 10101);
++	assert.equal(back.contact, 0);
++	const trunk = newChannel({ name: "Site 1", rxHz: 851012500, txHz: 806012500, mode: "p25trunk", wacn: 0xBEE00, sysid: 0x3A5,
++		nacTx: 0x3A5, talkgroup: 2001 });
++	const rt = decodeChannel(encodeChannel(trunk, blankChannel()));
++	assert.equal(rt.mode, "p25trunk");
++	assert.equal(rt.wacn, 0xBEE00);
++	assert.equal(rt.sysid, 0x3A5);
++	const nx = decodeChannel(encodeChannel(newChannel({ name: "NX", mode: "nxdn", nacRx: 0, nacTx: 12, talkgroup: 200 }), blankChannel()));
++	assert.equal(nx.mode, "nxdn");
++	assert.equal(nx.nacTx, 12);
++	assert.equal(nx.talkgroup, 200);
++
++	const m = empty();
++	m.channels.push({ ...p25, number: 1 }, { ...trunk, number: 2 }, newChannel({ name: "FM", number: 3 }));
++	const text = exportTable(m, "channels");
++	const rows = parse(text);
++	const head = rows[0];
++	const col = (row, name) => row[head.indexOf(name)];
++	assert.equal(col(rows[1], "Mode"), "P25");
++	assert.equal(col(rows[1], "RX NAC"), "any");
++	assert.equal(col(rows[1], "TX NAC"), "293");
++	assert.equal(col(rows[1], "Talkgroup"), "10101");
++	assert.equal(col(rows[2], "WACN"), "BEE00");
++	assert.equal(col(rows[2], "System ID"), "3A5");
++	assert.equal(col(rows[3], "RX NAC"), "");	// FM: no P25 values written
++	const n = empty();
++	const res = importTable(n, text);
++	assert.deepEqual(res.problems, []);
++	assert.equal(n.channels[0].nacTx, 0x293);
++	assert.equal(n.channels[0].nacRx, 0xF7E);
++	assert.equal(n.channels[1].wacn, 0xBEE00);
++	// a TX NAC that only receive uses is refused
++	const bad = importTable(empty(), "Name,Mode,RX Frequency (MHz),TX NAC\nX,P25,155.475,F7E\n");
++	assert.equal(bad.problems.length, 1);
++	assert.equal(bad.problems[0].code, "range");
++});
+--- a/site/rfoundrysite/repo.py
++++ b/site/rfoundrysite/repo.py
+@@ -95,7 +95,9 @@
+ 	m = re.search(r"^FEATURES\s*:=\s*((?:.*\\\n)*.*)$", text, re.M)
+ 	if not m:
+ 		raise SourceError("config/features.mk: no FEATURES list")
+-	return m.group(1).replace("\\\n", " ").split()
++	# A derivative may add switches with "FEATURES += ..." (the multi-mode build's P25, NXDN, ...)
++	added = " ".join(re.findall(r"^FEATURES\s*\+=\s*(.*)$", text, re.M))
++	return m.group(1).replace("\\\n", " ").split() + added.split()
+ 
+ 
+ def features():
