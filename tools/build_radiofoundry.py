@@ -120,11 +120,11 @@ def prepare(write=True, apply_series=True, limit=None):
     if git(DEST, "rev-parse", "HEAD") != PIN:
         raise SystemExit("Refusing incompatible derivative HEAD")
     run(["git", "-C", DEST, "submodule", "update", "--init", "third_party/FreeRTOS-Kernel"])
-    transform("config/features.mk", [("# Dependencies\n", "CONFIG_P25 ?= n\nCONFIG_P25_NATIVE ?= n\nCONFIG_FIRSTBOOT ?= n\nCONFIG_P25_BENCH ?= y\nCONFIG_CPU_PROFILE ?= n\nCONFIG_DEV_UPDATE ?= n\nCONFIG_DEV_TX ?= n\nFEATURES += P25 P25_NATIVE FIRSTBOOT P25_BENCH CPU_PROFILE DEV_UPDATE DEV_TX\nifeq ($(CONFIG_DEV_TX),y)\nifneq ($(CONFIG_FIRSTBOOT)$(CONFIG_DEV_UPDATE)$(CONFIG_P25_NATIVE),yyy)\n$(error DEV_TX requires FIRSTBOOT=y DEV_UPDATE=y P25_NATIVE=y)\nendif\nendif\nifeq ($(CONFIG_DEV_UPDATE),y)\nifneq ($(CONFIG_FIRSTBOOT)$(CONFIG_STUB_ENTRY),yy)\n$(error DEV_UPDATE requires FIRSTBOOT=y STUB_ENTRY=y)\nendif\nendif\nifeq ($(CONFIG_FIRSTBOOT),y)\nifneq ($(CONFIG_CPS_OPENFW)$(CONFIG_CPS_FAST),nn)\n$(error FIRSTBOOT requires CPS_OPENFW=n CPS_FAST=n)\nendif\nifneq ($(CONFIG_STUB_ENTRY),$(CONFIG_DEV_UPDATE))\n$(error FIRSTBOOT requires STUB_ENTRY to match DEV_UPDATE)\nendif\nendif\nifeq ($(CONFIG_P25_NATIVE),y)\nifneq ($(CONFIG_P25)$(CONFIG_DMR),yy)\n$(error P25_NATIVE needs P25=y and DMR=y)\nendif\nendif\n\n# Dependencies\n")])
-    transform("core/config.h", [("#define RFOUNDRY_CONFIG_H\n", "#define RFOUNDRY_CONFIG_H\n#ifndef CONFIG_P25\n#define CONFIG_P25 0\n#endif\n#ifndef CONFIG_P25_NATIVE\n#define CONFIG_P25_NATIVE 0\n#endif\n#ifndef CONFIG_P25_BENCH\n#define CONFIG_P25_BENCH 1\n#endif\n#ifndef CONFIG_DEV_UPDATE\n#define CONFIG_DEV_UPDATE 0\n#endif\n#ifndef CONFIG_DEV_TX\n#define CONFIG_DEV_TX 0\n#endif\n#ifndef CONFIG_CPU_PROFILE\n#define CONFIG_CPU_PROFILE 0\n#endif\n#ifndef CONFIG_FIRSTBOOT\n#define CONFIG_FIRSTBOOT 0\n#endif\n#if CONFIG_FIRSTBOOT\n#include \"firstboot/firstboot.h\"\n#endif\n")])
+    transform("config/features.mk", [("# Dependencies\n", "CONFIG_P25 ?= n\nCONFIG_P25_NATIVE ?= n\nCONFIG_NXDN ?= n\nCONFIG_FIRSTBOOT ?= n\nCONFIG_P25_BENCH ?= y\nCONFIG_CPU_PROFILE ?= n\nCONFIG_DEV_UPDATE ?= n\nCONFIG_DEV_TX ?= n\nFEATURES += P25 P25_NATIVE NXDN FIRSTBOOT P25_BENCH CPU_PROFILE DEV_UPDATE DEV_TX\nifeq ($(CONFIG_NXDN),y)\nifneq ($(CONFIG_DMR),y)\n$(error NXDN needs DMR=y (the AMBE+2 vocoder and voice bridge))\nendif\nendif\nifeq ($(CONFIG_DEV_TX),y)\nifneq ($(CONFIG_FIRSTBOOT)$(CONFIG_DEV_UPDATE)$(CONFIG_P25_NATIVE),yyy)\n$(error DEV_TX requires FIRSTBOOT=y DEV_UPDATE=y P25_NATIVE=y)\nendif\nendif\nifeq ($(CONFIG_DEV_UPDATE),y)\nifneq ($(CONFIG_FIRSTBOOT)$(CONFIG_STUB_ENTRY),yy)\n$(error DEV_UPDATE requires FIRSTBOOT=y STUB_ENTRY=y)\nendif\nendif\nifeq ($(CONFIG_FIRSTBOOT),y)\nifneq ($(CONFIG_CPS_OPENFW)$(CONFIG_CPS_FAST),nn)\n$(error FIRSTBOOT requires CPS_OPENFW=n CPS_FAST=n)\nendif\nifneq ($(CONFIG_STUB_ENTRY),$(CONFIG_DEV_UPDATE))\n$(error FIRSTBOOT requires STUB_ENTRY to match DEV_UPDATE)\nendif\nendif\nifeq ($(CONFIG_P25_NATIVE),y)\nifneq ($(CONFIG_P25)$(CONFIG_DMR),yy)\n$(error P25_NATIVE needs P25=y and DMR=y)\nendif\nendif\n\n# Dependencies\n")])
+    transform("core/config.h", [("#define RFOUNDRY_CONFIG_H\n", "#define RFOUNDRY_CONFIG_H\n#ifndef CONFIG_P25\n#define CONFIG_P25 0\n#endif\n#ifndef CONFIG_P25_NATIVE\n#define CONFIG_P25_NATIVE 0\n#endif\n#ifndef CONFIG_NXDN\n#define CONFIG_NXDN 0\n#endif\n#ifndef CONFIG_P25_BENCH\n#define CONFIG_P25_BENCH 1\n#endif\n#ifndef CONFIG_DEV_UPDATE\n#define CONFIG_DEV_UPDATE 0\n#endif\n#ifndef CONFIG_DEV_TX\n#define CONFIG_DEV_TX 0\n#endif\n#ifndef CONFIG_CPU_PROFILE\n#define CONFIG_CPU_PROFILE 0\n#endif\n#ifndef CONFIG_FIRSTBOOT\n#define CONFIG_FIRSTBOOT 0\n#endif\n#if CONFIG_FIRSTBOOT\n#include \"firstboot/firstboot.h\"\n#endif\n")])
     transform("Makefile", [
-        ("APP_DIRS := $(CORE_DIRS)", "ifeq ($(CONFIG_P25),y)\nCORE_DIRS += core/p25\nP25_LIB := core/p25/libdm32_imbe.a\nendif\nifeq ($(CONFIG_P25_NATIVE),y)\nCORE_DIRS += core/native_modem\nendif\nifeq ($(CONFIG_FIRSTBOOT),y)\nCORE_DIRS += core/firstboot\nendif\nAPP_DIRS := $(CORE_DIRS)"),
-        ("INCLUDES := -Ihal", "INCLUDES := -Icore/p25 -Icore/native_modem -Ihal"),
+        ("APP_DIRS := $(CORE_DIRS)", "ifeq ($(CONFIG_P25),y)\nCORE_DIRS += core/p25\nP25_LIB := core/p25/libdm32_imbe.a\nendif\nifeq ($(CONFIG_P25_NATIVE),y)\nCORE_DIRS += core/native_modem\nendif\nifneq ($(filter y,$(CONFIG_P25_NATIVE) $(CONFIG_NXDN)),)\nCORE_DIRS += core/dv\nendif\nifeq ($(CONFIG_NXDN),y)\nCORE_DIRS += core/nxdn\nendif\nifeq ($(CONFIG_FIRSTBOOT),y)\nCORE_DIRS += core/firstboot\nendif\nAPP_DIRS := $(CORE_DIRS)"),
+        ("INCLUDES := -Ihal", "INCLUDES := -Icore/p25 -Icore/native_modem -Icore/dv -Icore/nxdn -Ihal"),
         ("$(TARGET).elf: $(OBJ) $(LDSCRIPT)", "$(TARGET).elf: $(OBJ) $(P25_LIB) $(LDSCRIPT)"),
         ("-o $@ $(OBJ) -lm", "-o $@ $(OBJ) $(P25_LIB) -lm"),
     ])
@@ -161,9 +161,9 @@ def prepare(write=True, apply_series=True, limit=None):
         ('\t.spk_pending = hrc_audio_pcm_spk_pending,', '\t.spk_pending = hrc_audio_pcm_spk_pending,\n#if CONFIG_P25\n\t.playback_pace = playback_pace,\n\t.playback_stats = playback_stats,\n#endif'),
     ])
     write_owned(DEST / "platform/hrc7000/pcm_playback.inc", (ROOT / "integration/radiofoundry/pcm_playback.inc").read_bytes())
-    transform("boards/dm32/board.c", [(".radio = &dm32_radio,", ".radio = &dm32_radio,\n#if CONFIG_P25_NATIVE\n\t.native_modem = &dm32_native_ops,\n#endif\n#if CONFIG_P25_NATIVE\n\t.native_mic_route = dm32_native_mic_route,\n#endif"),
+    transform("boards/dm32/board.c", [(".radio = &dm32_radio,", ".radio = &dm32_radio,\n#if CONFIG_P25_NATIVE\n\t.native_modem = &dm32_native_ops,\n#endif\n#if CONFIG_P25_NATIVE\n\t.native_mic_route = dm32_native_mic_route,\n#endif\n#if CONFIG_NXDN\n\t.audio_tap = &dm32_audio_tap,\n#endif"),
         ('#include "pins.h"', '#include "pins.h"\n#include "dm32_firstboot.inc"')])
-    transform("boards/dm32/dm32.h", [("#include <stdbool.h>", "#include <stdbool.h>\n#if CONFIG_P25_NATIVE\n#include \"native_test.h\"\nextern nt_ops dm32_native_ops;\n#endif\n#if CONFIG_P25_NATIVE\nvoid dm32_native_mic_route(bool on);\n#endif")])
+    transform("boards/dm32/dm32.h", [("#include <stdbool.h>", "#include <stdbool.h>\n#if CONFIG_P25_NATIVE\n#include \"native_test.h\"\nextern nt_ops dm32_native_ops;\n#endif\n#if CONFIG_P25_NATIVE\nvoid dm32_native_mic_route(bool on);\n#endif\n#if CONFIG_NXDN\n#include \"hal_audio_tap.h\"\nextern const hal_audio_tap_t dm32_audio_tap;\n#endif")])
     transform("boards/dm32/radio_dm32.c", [
         ("static void pa_key(void)\n{", "static void pa_key(void)\n{\n#if CONFIG_FIRSTBOOT\n\tif (!firstboot_tx_allowed(FB_PA_KEY)) { firstboot_deny(FB_PA_KEY); board_rf_safe(); return; }\n#endif"),
         ("static void dmr_rf_switch(bool tx)\n{", "static void dmr_rf_switch(bool tx)\n{\n#if CONFIG_FIRSTBOOT\n\tif (tx && !firstboot_tx_allowed(FB_RF_SWITCH)) { firstboot_deny(FB_RF_SWITCH); board_rf_safe(); return; }\n#endif"),
@@ -174,7 +174,7 @@ def prepare(write=True, apply_series=True, limit=None):
     # Append board glue while preserving ownership checks on generated files.
     board_path=DEST / "boards/dm32/radio_dm32.c"
     board_body=staged(board_path)
-    write_owned(board_path,board_body+b'\n#include "dm32_native.inc"\n',board_body)
+    write_owned(board_path,board_body+b'\n#include "dm32_native.inc"\n#include "dm32_nxdn.inc"\n',board_body)
     transform("platform/hrc7000/gpio.c", [
         ('#include "platform.h"', '#include "platform.h"\n#include "config.h"'),
         ('\tbank_rmw(hrc_gpio_bank(pin) + GPIO_DR, hrc_gpio_bit(pin), level);', '#if CONFIG_FIRSTBOOT\n\tlevel=board_firstboot_pin_level(pin,level);\n#endif\n\tbank_rmw(hrc_gpio_bank(pin) + GPIO_DR, hrc_gpio_bit(pin), level);')])
@@ -232,7 +232,14 @@ def prepare(write=True, apply_series=True, limit=None):
     write_owned(DEST / "core/p25/dm32_imbe.h", (ROOT / "src/codec/dm32_imbe.h").read_bytes())
     for p in sorted((ROOT / "integration/radiofoundry").glob("*")):
         if p.suffix in (".c", ".h"):
-            write_owned(DEST / "core/p25" / p.name, p.read_bytes())
+            # the digital voice channel interface serves P25 and NXDN builds alike
+            write_owned(DEST / ("core/dv" if p.stem == "radio_dv" else "core/p25") / p.name, p.read_bytes())
+    for p in sorted((ROOT / "src/nxdn").glob("*")):
+        if p.suffix in (".c", ".h", ".inc"):
+            write_owned(DEST / "core/nxdn" / p.name, p.read_bytes())
+    for p in sorted((ROOT / "integration/radiofoundry/nxdn").glob("*")):
+        folder = "boards/dm32" if p.suffix == ".inc" else "core/dv"
+        write_owned(DEST / folder / p.name, p.read_bytes())
     for p in sorted((ROOT / "src/modem").glob("*")):
         if p.suffix in (".c", ".h"): write_owned(DEST / "core/native_modem" / p.name,p.read_bytes())
     for p in sorted((ROOT / "integration/radiofoundry/native").glob("*")):
@@ -279,6 +286,7 @@ def main():
     ap.add_argument("--dev-update", action="store_true", help="approved RAM-helper cable entry; TX/write inhibits remain")
     ap.add_argument("--reuse-codec", action="store_true", help="reuse codec only when inputs/compiler/archive/call graphs match checked hashes")
     ap.add_argument("--tx-bench",action="store_true",help="bounded native TX on 145.500 MHz; retains ordinary PTT/storage guards")
+    ap.add_argument("--no-nxdn", action="store_true", help="build with CONFIG_NXDN=n")
     args = ap.parse_args()
     if args.tx_bench and not (args.first_boot and args.dev_update):ap.error("tx-bench requires first-boot and dev-update")
     if args.dev_update and not args.first_boot:ap.error("dev-update needs first-boot restrictions")
@@ -306,10 +314,11 @@ def main():
     native=not args.disable and not args.disable_native
     suffix = "firstboot" if args.first_boot else "off" if args.disable else "native" if native else "lab"
     identity=suffix
-    suffix += ("-lean" if args.lean else "") + ("-cpu" if args.cpu_profile else "") + ("-dev" if args.dev_update else "") + ("-tx" if args.tx_bench else "")
+    suffix += ("-lean" if args.lean else "") + ("-cpu" if args.cpu_profile else "") + ("-dev" if args.dev_update else "") + ("-tx" if args.tx_bench else "") + ("-nonxdn" if args.no_nxdn else "")
     b = f"build/dm32-p25-{suffix}"
     command = ["make", "-j8", "BOARD=dm32", f"CROSS={ROOT}/toolchain/bin/csky-elf-", f"BUILD={b}",
         "CONFIG_P25=" + ("n" if args.disable else "y"), "CONFIG_P25_NATIVE="+("y" if native else "n"), "CONFIG_DMR_IP_GATEWAY=n", "CONFIG_NET_PPP=n",
+        "CONFIG_NXDN=" + ("n" if args.no_nxdn else "y"),
         "CONFIG_APRS=n", "CONFIG_SFR=n", "CONFIG_HOTSPOT=n", "CONFIG_ZONE_SHARE=n",
         f"RFOUNDRY_VERSION=dfbaf20c-p25-{identity}", f"RFOUNDRY_GIT_TIME={git(UP, 'show', '-s', '--format=%ct', 'HEAD')}",
         "RFOUNDRY_GIT_DIRTY=1",
@@ -338,9 +347,16 @@ def main():
             for p in codec.glob("*.ci"): shutil.copyfile(p, ci / p.name)
         stack_log = ROOT / f"logs/radiofoundry-stack-{suffix}.log"
         stack_args=[]
+        extra=""
+        if not args.no_nxdn:
+            # The board's flat FM paths live in the included dm32_nxdn.inc, which the scanner doesn't follow; its timer
+            # interrupt runs on the 2048-byte IRQ stack
+            extra+="\n# NXDN: the board's audio tap (boards/dm32/dm32_nxdn.inc) and its timer interrupt\n"
+            extra+="ptr fm_rx_flat boards/dm32/radio_dm32.c:flat_rx\nptr fm_tx_inject boards/dm32/radio_dm32.c:flat_tx_inject\n"
+            extra+="ptr fm_rx_read hrc_fm_rx_read\ntask boards/dm32/radio_dm32.c:flat_tick 512\n"
+            extra+="ptr flat_pull core/dv/radio_nxdn.c:pull\n"
         if native:
-            edges=DEST / b / "native-stack-edges.txt"
-            extra="\n# Native interrupt entries use the separate 2048-byte IRQ stack.\n"
+            extra+="\n# Native interrupt entries use the separate 2048-byte IRQ stack.\n"
             extra+="".join(f"task platform/hrc7000/hrc_native_port.c:{fn} 512\n" for fn in ("sys","ts_tx","ts_rx","rftx","guard","pa"))
             # The source scanner does not follow the included board .inc.
             # Supply its actual function-pointer targets for conservative depth.
@@ -354,6 +370,8 @@ def main():
                 "start_audio":("playback_pace",),
                 "p25_lab_command":("playback_stats",)}.items():
                 extra+="call "+caller+" "+" ".join(targets)+"\n"
+        if extra:
+            edges=DEST / b / "native-stack-edges.txt"
             edges.write_text((UP / "tools/stack_check_edges.txt").read_text()+extra)
             stack_args=[f"STACK_CHECK_ARGS=--edges {edges}"]
         with stack_log.open("w") as f:

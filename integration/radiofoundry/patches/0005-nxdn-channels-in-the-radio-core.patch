@@ -1,0 +1,386 @@
+--- a/core/radio/radio_sm.h
++++ b/core/radio/radio_sm.h
+@@ -21,8 +21,9 @@
+ #endif
+ 
+ #define RADIO_SM_CW		(CONFIG_HOTSPOT || CONFIG_SFR_CWID)	// the CW keyer (radio_sm.c)
+-// Digital voice channels on the modem's native physical layer (the multi-mode derivative's core/p25)
+-#define RADIO_SM_DV		(CONFIG_P25 && CONFIG_P25_NATIVE)
++// Digital voice channels (the multi-mode derivative's core/dv): P25 on the modem's native physical layer, NXDN48 on the
++// board's flat FM audio paths
++#define RADIO_SM_DV		((CONFIG_P25 && CONFIG_P25_NATIVE) || CONFIG_NXDN)
+ #define RADIO_POLL_MS		25	// status poll and squelch period
+ #define RADIO_RETUNE_SETTLE_MS	400	// RREQ_RETUNE: tune once the reference trim has held this long
+ #define RADIO_TICK_MS		10	// DMR call stack poll (radio_sm_tick)
+@@ -267,7 +268,7 @@
+ 	int8_t green_out;
+ 	int8_t red_out;
+ 	bool hotspot;			// hotspot mode: the host link owns the modem
+-	bool dv_running;		// a P25 channel's native session runs (radio_dv.h); the board is the modem's
++	bool dv_running;		// a digital voice channel runs (radio_dv.h): P25's native session or NXDN's modem
+ 	bool dv_tot;			// the time-out ended this digital transmission: denied once it has gone off air
+ 	uint32_t dv_tx_calls;		// radio_dv_status_t.tx_calls when this transmission began
+ 	uint32_t dv_now_ms;		// the time of the last poll or tick (radio_dv_status ages its frames by it)
+--- a/core/radio/radio_sm.c
++++ b/core/radio/radio_sm.c
+@@ -30,7 +30,7 @@
+ #include "radio/beep.h"	// beep_t (beep_play only with CONFIG_BEEP)
+ #include "radio/vibe.h"	// vibe_t (vibe_play only with CONFIG_VIBRATE)
+ #if RADIO_SM_DV
+-#include "p25/radio_dv.h"	// P25 channels on the modem's native physical layer (the multi-mode derivative)
++#include "dv/radio_dv.h"	// P25 and NXDN channels (the multi-mode derivative)
+ #endif
+ #if CONFIG_NET_USRP || CONFIG_APRS_RX
+ #include "usbaudio/audio_mux.h"	// the PCM stream shared with a host audio session and APRS
+@@ -829,12 +829,20 @@
+ }
+ 
+ #if RADIO_SM_DV
+-// --- P25 channels: the native session (radio_dv.h) keeps the modem; the radio core keeps the policy ---
++// --- Digital voice channels (P25, NXDN): radio_dv.h keeps the modem; the radio core keeps the policy ---
+ 
+ // The unit ID our calls carry: the channel's ID override, else the radio's DMR ID
+ static uint32_t dv_unit_id(const channel_t *ch)
+ {
+ 	return ch->dmr_id != 0 ? ch->dmr_id : codeplug_dmr_id();
++}
++
++#define NXDN_UNIT_MAX	65519u	// 65520-65535 are special IDs (65535 the all call)
++
++// The digital voice modes this build has
++static bool dv_mode_built(uint8_t mode)
++{
++	return (mode == RADIO_MODE_P25 && CONFIG_P25 && CONFIG_P25_NATIVE) || (mode == RADIO_MODE_NXDN && CONFIG_NXDN);
+ }
+ 
+ static void dv_begin(radio_sm_t *sm)
+@@ -866,8 +874,9 @@
+ static bool bcl_busy(const radio_sm_t *sm)
+ {
+ #if RADIO_SM_DV
+-	// P25: CARRIER refuses while frames of any NAC are heard; WRONG_TONE ("NAC") while frames of another NAC are,
+-	// the channel used by a group we don't hear (as an FM carrier without our tone). Our own NAC's call: talk back
++	// P25 / NXDN: CARRIER refuses while frames of any NAC (RAN) are heard; WRONG_TONE ("NAC") while frames of another
++	// NAC (RAN) are, the channel used by a group we don't hear (as an FM carrier without our tone). Our own NAC's (RAN's)
++	// call: talk back
+ 	if (sm->dv_running && sm->set.bcl != RADIO_BCL_OFF) {
+ 		radio_dv_status_t s;
+ 		radio_dv_status(&s, sm->dv_now_ms);
+@@ -911,11 +920,14 @@
+ 	}
+ #if RADIO_SM_DV
+ 	if (codeplug_mode_digital_voice(ch->mode)) {
+-		if (ch->mode != RADIO_MODE_P25 || !sm->dv_running) {
+-			return TXDENY_MODE;		// NXDN and trunking come later; or the native session didn't start
++		if (!dv_mode_built(ch->mode) || !sm->dv_running) {
++			return TXDENY_MODE;		// trunking comes later; or the channel's session didn't start
+ 		}
+ 		if (dv_unit_id(ch) == 0 || ch->talkgroup == 0) {
+ 			return TXDENY_NO_ID;		// a P25 call needs our unit ID and a talkgroup (TIA-102.BAAD-B 6.1.1.1)
++		}
++		if (ch->mode == RADIO_MODE_NXDN && dv_unit_id(ch) > NXDN_UNIT_MAX) {
++			return TXDENY_NO_ID;		// NXDN unit IDs are 16 bits, 1-65519: set the channel's own ID
+ 		}
+ 	}
+ #endif
+@@ -959,7 +971,7 @@
+ }
+ 
+ #if RADIO_SM_DV
+-// PTT on a P25 channel: the TX rules passed (tx_check); the native session switches to transmit
++// PTT on a digital voice channel: the TX rules passed (tx_check); its session switches to transmit
+ static void dv_ptt_down(radio_sm_t *sm, uint32_t now_ms)
+ {
+ 	radio_dv_status_t s;
+@@ -6134,6 +6146,7 @@
+ #if RADIO_SM_DV
+ 	sm->dv_now_ms = now_ms;
+ 	if (sm->dv_running) {
++		radio_dv_service(now_ms);	// NXDN's modem runs here
+ 		dv_follow(sm, now_ms);
+ 	}
+ #endif
+--- a/hal/hal_audio_tap.h
++++ b/hal/hal_audio_tap.h
+@@ -29,6 +29,7 @@
+ 	AUDIO_TAP_DMR		= 1u << 2,	// DMR voice as PCM both ways: always there with a vocoder (the stream itself)
+ 	AUDIO_TAP_FM_RX_RAW	= 1u << 3,	// FM receive audio before de-emphasis and the voice filter (better for AFSK)
+ 	AUDIO_TAP_FM_TX_FLAT	= 1u << 4,	// the modulator without pre-emphasis, compressor and voice filter
++	AUDIO_TAP_FM_RX_FLAT	= 1u << 5,	// flat FM receive audio read by the radio task (fm_rx_flat, fm_rx_read)
+ };
+ 
+ // What the FM taps carry (usb-audio.md 5.5): voice audio, or the flat signal for data modems with their own waveform
+@@ -56,6 +57,17 @@
+ 	// 12.5 kHz channel), as a 16-bit sample peak; lets the core scale host audio. 0 = unknown
+ 	int16_t fm_tx_nominal_peak;
+ 
++	// Flat FM receive audio for a data modem with its own waveform (AUDIO_TAP_FM_RX_FLAT; NULL without), where it doesn't
++	// ride the PCM stream: the discriminator at 8 kHz with the voice filter and de-emphasis off where the board can,
++	// unsquelched. fm_rx_flat(true) after rx() on the channel (false: the board can't), fm_rx_read every poll from the
++	// radio task (the board buffers 100 ms or more), fm_rx_flat(false) before leaving the channel or transmitting. The
++	// board's own rx() / tx() leave it as it was
++	bool (*fm_rx_flat)(bool on);
++	uint16_t (*fm_rx_read)(int16_t *buf, uint16_t max);
++	// What the flat paths still do to a signal, as measured on the radio, for a modem to undo (0: flat, or not yet
++	// measured): first-order high-pass corners on receive and transmit, and a de-emphasis time constant on receive
++	uint16_t flat_rx_hpf_hz, flat_tx_hpf_hz, flat_rx_deemph_us;
++
+ 	// --- probe (diagnostics, CONFIG_AUDIO_PROBE; NULL otherwise) ---
+ 
+ 	// Read (write false) or write (write true) one register of the chip that owns the audio path (an HR_C6000
+--- a/platform/hrc7000/fm_rx_audio.c
++++ b/platform/hrc7000/fm_rx_audio.c
+@@ -6,7 +6,7 @@
+ // every 25 ms, so the ring holds four halves (128 ms) for a late poll. The ring comes from the RTOS heap only while
+ // APRS listens: static RAM is short on these radios.
+ #include "config.h"
+-#if CONFIG_APRS_RX
++#if CONFIG_APRS_RX || CONFIG_NXDN
+ #include "fm_rx_audio.h"
+ #include "dmr_glue.h"
+ #include "platform.h"
+--- a/platform/hrc7000/fm_rx_audio.h
++++ b/platform/hrc7000/fm_rx_audio.h
+@@ -10,7 +10,7 @@
+ #include "config.h"
+ #include "modem/hrc7000/hrc7000.h"
+ 
+-#if CONFIG_APRS_RX
++#if CONFIG_APRS_RX || CONFIG_NXDN
+ // Once, from the radio init, after the modem is attached
+ void hrc_fm_rx_attach(hrc7000_t *modem);
+ // Start and stop (task level). Start takes the ring from the RTOS heap and fails without it, or without the DMR
+--- a/boards/dm32/radio_dm32.c
++++ b/boards/dm32/radio_dm32.c
+@@ -57,6 +57,16 @@
+ static bool asleep;		// the receiver is powered down between listen windows (rx_sleep)
+ static bool aprs_listen;	// APRS takes the HR_C7000's FM audio (aprs_listen_route)
+ static bool afsk_tx;		// APRS tones play through the prompt FIFO into the modulator (afsk_tx_route)
++#if CONFIG_NXDN
++// The flat FM paths of a data modem (dm32_nxdn.inc, hal_audio_tap.h): its receive audio from the HR_C7000's FM copy,
++// its transmit samples through the prompt FIFO into the modulator
++static bool data_listen;
++static bool data_tx;
++static bool flat_tx_inject(audio_tap_pull_t pull, audio_tap_mode_t m);
++#else
++#define data_listen false
++#define data_tx false
++#endif
+ 
+ // The speaker amplifier is on while any user wants it
+ #define AMP_RADIO	0x01u	// receive audio
+@@ -384,6 +394,11 @@
+ 		hrc_afsk.tx_stop();	// the core stops the tones first; this is the safety net
+ 	}
+ #endif
++#if CONFIG_NXDN
++	if (data_tx) {
++		flat_tx_inject(NULL, AUDIO_TAP_FLAT);	// the same for a data modem's samples
++	}
++#endif
+ 	if (mode == RADIO_MODE_FM) {
+ 		hrc7000_fm_idle(&modem);
+ 	}
+@@ -458,7 +473,7 @@
+ {
+ 	// The FD6818's output is squelched noise while the squelch is closed: the speaker listens to it only while it is open
+ 	bool fm_open = mode == RADIO_MODE_FM && !transmitting && !pcm_on && rx_audio;
+-	bool analog = fm_open && !aprs_listen;
++	bool analog = fm_open && !aprs_listen && !data_listen;
+ 	hrc_pin_write(PIN_SPK_SOURCE, analog);
+ 	if (!transmitting) {
+ 		hrc_pin_write(PIN_MIC_PATH, !analog);
+@@ -516,7 +531,7 @@
+ // talk permit before the first burst). In FM TX the microphone has the modulator
+ static void ring_play(void)
+ {
+-	bool on = (pcm_on && !(transmitting && mode != RADIO_MODE_DMR)) || afsk_tx;
++	bool on = (pcm_on && !(transmitting && mode != RADIO_MODE_DMR)) || afsk_tx || data_tx;
+ 	hrc_audio_pcm_ring(&modem, on);
+ }
+ 
+--- a/tests/host/radioCoreTest.c
++++ b/tests/host/radioCoreTest.c
+@@ -4614,15 +4614,20 @@
+ #endif
+ 
+ #if RADIO_SM_DV
+-// ---- P25 channels: a fake native session behind radio_dv.h ----
+-#include "p25/radio_dv.h"
++// ---- P25 and NXDN channels: a fake session behind radio_dv.h ----
++#include "dv/radio_dv.h"
+ enum { NT_USER_STOP_ = 1, NT_TX_COMPLETE_ = 3, NT_LATE_ = 8, NT_DENIED_ = 14 };	// native_test.h
+ static struct {
+ 	bool selected, refuse;
+ 	radio_dv_cfg_t cfg;
+-	int selects, leaves, downs, ups;
++	int selects, leaves, downs, ups, services;
+ 	radio_dv_status_t st;
+ } dv;
++void radio_dv_service(uint32_t now_ms)
++{
++	(void)now_ms;
++	dv.services++;
++}
+ bool radio_dv_select(const radio_dv_cfg_t *c)
+ {
+ 	if (c == NULL) {
+@@ -4678,6 +4683,105 @@
+ }
+ static void dv_quiet(void) { dv.st.sync = dv.st.sync_ours = dv.st.playing = false; }
+ 
++#if CONFIG_NXDN
++// NXDN channels take the same path as P25 (radio_dv.h); what differs is the RAN in place of the NAC, 16-bit unit IDs
++// and the modem running from the radio tick
++static void test_nxdn_channel(void)
++{
++	setup_codeplug();
++	add(3, "NXDN Ops", 451125000, RADIO_MODE_NXDN, false, 1);
++	chans[3].nac_rx = 12;		// RAN
++	chans[3].nac_tx = 12;
++	chans[3].talkgroup = 200;
++	add(4, "P25 Ops", 155475000, RADIO_MODE_P25, false, 1);
++	chans[4].talkgroup = 100;
++	start();
++	memset(&dv, 0, sizeof(dv));
++	uint32_t id = own_dmr_id;
++	own_dmr_id = 4001;
++	req(RREQ_ZONE_POS, 2);
++	run(30);
++	CHECK(sm.view.channel_number == 3 && sm.view.ch.mode == RADIO_MODE_NXDN);
++	CHECK(dv.selects == 1 && sm.dv_running && dv.cfg.mode == RADIO_MODE_NXDN);
++	CHECK(dv.cfg.rx_hz == 451125000 && dv.cfg.nac_rx == 12 && dv.cfg.nac_tx == 12 && dv.cfg.talkgroup == 200);
++	CHECK(dv.cfg.unit_id == 4001 && dv.cfg.power == 1);
++	CHECK(dv.services > 0);			// the modem runs from the tick
++	int services = dv.services;
++	run(100);
++	CHECK(dv.services >= services + 9);	// every 10 ms
++
++	// A call for us plays
++	dv_heard(true, true, 200, 3210);
++	run(30);
++	CHECK(sm.view.state == RS_RX && sm.view.dv.state == RDV_RX && sm.view.dv.source == 3210);
++	dv_quiet();
++	run(30);
++	CHECK(sm.view.state == RS_IDLE);
++
++	// PTT on air and off, as P25
++	req(RREQ_PTT, 1);
++	CHECK(sm.view.state == RS_TX && dv.downs == 1 && hw.tx_calls == 0);
++	CHECK(sm.view.dv.talkgroup == 200 && sm.view.dv.source == 4001);
++	run(500);
++	req(RREQ_PTT, 0);
++	CHECK(dv.ups == 1);
++	dv_tx_ended(NT_TX_COMPLETE_);
++	run(20);
++	CHECK(sm.view.state == RS_IDLE);
++
++	// Busy lockout by RAN: another RAN's frames refuse with WRONG_TONE
++	sm.set.bcl = RADIO_BCL_WRONG_TONE;
++	dv_heard(false, false, 0, 0);
++	run(30);
++	req(RREQ_PTT, 1);
++	CHECK(sm.view.state == RS_TX_DENIED && sm.view.tx_deny == TXDENY_BUSY && dv.downs == 1);
++	req(RREQ_PTT, 0);
++	dv_quiet();
++	run(30);
++	sm.set.bcl = RADIO_BCL_OFF;
++
++	// A DMR ID beyond NXDN's 16-bit range: refused until the channel has its own unit ID
++	own_dmr_id = 3101234;
++	req(RREQ_PTT, 1);
++	CHECK(sm.view.state == RS_TX_DENIED && sm.view.tx_deny == TXDENY_NO_ID && dv.downs == 1);
++	req(RREQ_PTT, 0);
++	chans[3].dmr_id = 65519;
++	req(RREQ_ZONE_POS, 0);
++	run(30);
++	req(RREQ_ZONE_POS, 2);
++	run(30);
++	CHECK(dv.cfg.unit_id == 65519);
++	req(RREQ_PTT, 1);
++	CHECK(sm.view.state == RS_TX && dv.downs == 2);
++	dv_tx_ended(NT_TX_COMPLETE_);
++	req(RREQ_PTT, 0);
++	run(20);
++	chans[3].dmr_id = 65520;
++	req(RREQ_ZONE_POS, 0);
++	run(30);
++	req(RREQ_ZONE_POS, 2);
++	run(30);
++	req(RREQ_PTT, 1);
++	CHECK(sm.view.state == RS_TX_DENIED && sm.view.tx_deny == TXDENY_NO_ID);
++	req(RREQ_PTT, 0);
++	own_dmr_id = id;
++
++#if !(CONFIG_P25 && CONFIG_P25_NATIVE)
++	// A P25 channel in a build without P25: received as nothing, PTT refused as a mode the build lacks
++	req(RREQ_ZONE_POS, 3);
++	run(30);
++	CHECK(sm.view.ch.mode == RADIO_MODE_P25);
++	req(RREQ_PTT, 1);
++	CHECK(sm.view.state == RS_TX_DENIED && sm.view.tx_deny == TXDENY_MODE);
++	req(RREQ_PTT, 0);
++#endif
++	req(RREQ_ZONE_POS, 0);
++	run(30);
++	CHECK(!sm.dv_running);
++}
++#endif
++
++#if CONFIG_P25 && CONFIG_P25_NATIVE
+ static void test_p25_channel(void)
+ {
+ 	setup_codeplug();
+@@ -4817,11 +4921,15 @@
+ 	CHECK(!sm.dv_running);
+ }
+ #endif
++#endif
+ 
+ int main(void)
+ {
+-#if RADIO_SM_DV
++#if RADIO_SM_DV && CONFIG_P25 && CONFIG_P25_NATIVE
+ 	test_p25_channel();
++#endif
++#if RADIO_SM_DV && CONFIG_NXDN
++	test_nxdn_channel();
+ #endif
+ 	test_startup();
+ 	test_persist();
+--- a/tests/host/Makefile
++++ b/tests/host/Makefile
+@@ -188,11 +188,14 @@
+                        $(CORE)/ui/ui_svc.h
+ 	$(CC) $(CFLAGS) $(CORE_HAL) -I. -DDMR_RX_TRACE=0 -DCONFIG_DMR_IP_GATEWAY=0 -DCONFIG_SFR=1 -DCONFIG_APRS=0 -DCONFIG_VFO_DMR=0 -o $@ $(RCORE) -lm
+ 
+-# The same with P25 channels on the native modem (the multi-mode derivative; radio_dv.h faked in the test)
+-TESTS   += radioCoreTestP25
++# The same with P25 and NXDN channels (the multi-mode derivative; radio_dv.h faked in the test), and NXDN alone
++TESTS   += radioCoreTestP25 radioCoreTestNXDN
+ radioCoreTestP25: $(RCORE) $(wildcard $(CORE)/radio/*.h) $(wildcard $(CORE)/dmr/call/*.h) $(CORE)/dmr/dmrDataService.h \
+-                  $(CORE)/ui/ui_svc.h $(CORE)/p25/radio_dv.h
+-	$(CC) $(CFLAGS) $(CORE_HAL) -I. -DDMR_RX_TRACE=0 -DCONFIG_DMR_IP_GATEWAY=0 -DCONFIG_SFR=1 -DCONFIG_APRS=0 -DCONFIG_P25=1 -DCONFIG_P25_NATIVE=1 -o $@ $(RCORE) -lm
++                  $(CORE)/ui/ui_svc.h $(CORE)/dv/radio_dv.h
++	$(CC) $(CFLAGS) $(CORE_HAL) -I. -DDMR_RX_TRACE=0 -DCONFIG_DMR_IP_GATEWAY=0 -DCONFIG_SFR=1 -DCONFIG_APRS=0 -DCONFIG_P25=1 -DCONFIG_P25_NATIVE=1 -DCONFIG_NXDN=1 -o $@ $(RCORE) -lm
++radioCoreTestNXDN: $(RCORE) $(wildcard $(CORE)/radio/*.h) $(wildcard $(CORE)/dmr/call/*.h) $(CORE)/dmr/dmrDataService.h \
++                  $(CORE)/ui/ui_svc.h $(CORE)/dv/radio_dv.h
++	$(CC) $(CFLAGS) $(CORE_HAL) -I. -DDMR_RX_TRACE=0 -DCONFIG_DMR_IP_GATEWAY=0 -DCONFIG_SFR=1 -DCONFIG_APRS=0 -DCONFIG_NXDN=1 -o $@ $(RCORE) -lm
+ 
+ # The everyday features (scan, beeps, battery, TOT warning, BCL, roger beep, 1750 Hz burst, VOX, battery saving)
+ TESTS   += radioFeaturesTest
+@@ -287,12 +290,13 @@
+ 	$(CC) $(CFLAGS) -I$(ROOT)/hal -Wshadow -o $@ boardBandTest.c
+ 
+ run: run-core
+-run-core: radioCoreTest radioCoreTestNoVfoDmr radioCoreTestP25 radioFeaturesTest radioFeaturesTestNoDual roamTest radioListenBandsTest inputTest aprsRadioTest quadratureTest serialmicTest miclevelTest \
++run-core: radioCoreTest radioCoreTestNoVfoDmr radioCoreTestP25 radioCoreTestNXDN radioFeaturesTest radioFeaturesTestNoDual roamTest radioListenBandsTest inputTest aprsRadioTest quadratureTest serialmicTest miclevelTest \
+           rx2LinkTest keyassignTest powerSwitchTest boardBandTest batteryTest
+ 	./aprsRadioTest
+ 	./radioCoreTest
+ 	./radioCoreTestNoVfoDmr
+ 	./radioCoreTestP25
++	./radioCoreTestNXDN
+ 	./radioFeaturesTest
+ 	./radioFeaturesTestNoDual
+ 	./roamTest
