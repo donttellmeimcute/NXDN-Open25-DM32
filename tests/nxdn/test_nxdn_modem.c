@@ -7,6 +7,7 @@
  *   test_nxdn_modem --sweep    the BER / FER tables of docs/nxdn-modem.md */
 #include "nxdn_call.h"
 #include "nxdn_modem.h"
+#include "nxdn_link.h"
 #include "nxdn_channel.h"
 #include "dmr/ambe/ambeFec.h"
 #include <assert.h>
@@ -220,6 +221,51 @@ static unsigned join_loss(int kind, double cnr, unsigned seed)
     return expect > slot_ok ? expect - slot_ok : 0;
 }
 
+/* Finding a call in the radio's unsquelched audio (nxdn_link, as the radio runs it: no squelch edge, the demodulator
+ * reacquires while the symbols don't fit). Before the call: silence, or uniform noise of the given peak; kind 4 joins
+ * 2.5 frames into the call. Returns the voice slots lost against what could be heard */
+static unsigned link_slots;
+static void link_sink(void *ctx, const uint8_t slot[9]) { (void)ctx; (void)slot; link_slots++; }
+static unsigned link_left;
+static bool link_src(void *ctx, uint8_t slot[9])
+{
+    (void)ctx;
+    if (!link_left) return false;
+    link_left--;
+    for (unsigned i = 0; i < 9; i++) slot[i] = (uint8_t)next();
+    return true;
+}
+static unsigned find_loss(int kind, int noise_peak, unsigned trial, bool *late)
+{
+    static nxdn_link tx, rx;
+    static const nxdn_audio_path flat = { 0, 0, 0, 2048 };
+    size_t n = 0, lead = 800 + trial * 53;
+    for (; n < lead; n++) rx8[n] = noise_peak ? (int16_t)((int32_t)(next() % (2u * noise_peak + 1)) - noise_peak) : 0;
+    nxdn_link_init(&tx, &flat, 0, 0, 0, NULL, NULL);
+    nxdn_tx_cfg c = { 7, 1234, 55, false, false, NXDN_DIR_INBOUND };
+    nxdn_link_tx_begin(&tx, &c);
+    link_left = 40;
+    size_t call0 = n, skip = kind == 4 ? (size_t)((NXDN_PREAMBLE_SYMBOLS + NXDN_FRAME_SYMBOLS * 2.5) * 10 / 3) : 0;
+    for (;;) {
+        nxdn_link_tx_fill(&tx, link_src, NULL);
+        if (!link_left) nxdn_link_tx_end(&tx);
+        int16_t s[80];
+        uint16_t g = nxdn_link_pull(&tx, s, 80);
+        for (uint16_t i = 0; i < g && n < MAX_SAMP; i++) rx8[n++] = (int16_t)(s[i] + 150 * 8);   /* +150 Hz */
+        if (nxdn_link_tx_done(&tx)) break;
+    }
+    if (skip) {
+        memmove(rx8 + call0, rx8 + call0 + skip, (n - call0 - skip) * sizeof rx8[0]);
+        n -= skip;
+    }
+    nxdn_link_init(&rx, &flat, 7, 55, 9, link_sink, NULL);
+    link_slots = 0;
+    for (size_t i = 0; i < n; i += 80) nxdn_link_rx_audio(&rx, rx8 + i, n - i < 80 ? n - i : 80);
+    unsigned expect = kind == 4 ? 40 - 12 : 40;
+    *late = rx.rx.late_entries != 0;
+    return link_slots >= expect ? 0 : expect - link_slots;
+}
+
 static void sweep(void)
 {
     static const double cnr[] = { 6, 8, 10, 12, 14, 16, 20, 30 };
@@ -292,6 +338,27 @@ static void sweep(void)
             printf(" %.2f |", lost / 4.0 / SEEDS);
         }
         printf("\n");
+    }
+
+    /* Finding calls without a squelch edge */
+    static const struct { const char *name; int kind, peak; } fk[] = {
+        { "silence", 0, 0 }, { "noise, +-2500 Hz peak", 1, 20000 }, { "noise, +-1200 Hz peak", 2, 9600 },
+        { "noise, +-400 Hz peak", 3, 3200 }, { "noise +-1200 Hz, joining 2.5 frames into the call", 4, 9600 },
+    };
+    printf("\n### Finding a call in the receiver's unsquelched audio (nxdn_link; 40 calls of 10 voice frames each, "
+           "+150 Hz)\n\n| Before the carrier | Calls joined at their header | Voice frames lost per call |\n|---|---:|---:|\n");
+    for (unsigned k = 0; k < sizeof fk / sizeof *fk; k++) {
+        unsigned lost = 0, header = 0;
+        for (unsigned trial = 0; trial < 40; trial++) {
+            bool late;
+            rnd = 0x51u + trial * 7919u;
+            lost += find_loss(fk[k].kind, fk[k].peak, trial, &late);
+            header += !late;
+        }
+        if (fk[k].kind == 4)
+            printf("| %s | n/a | %.2f (after the frames before it) |\n", fk[k].name, lost / 4.0 / 40);
+        else
+            printf("| %s | %u / 40 | %.2f |\n", fk[k].name, header, lost / 4.0 / 40);
     }
 
     /* Transmit spectrum of both routes */

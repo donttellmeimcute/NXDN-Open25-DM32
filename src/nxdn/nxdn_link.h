@@ -18,13 +18,15 @@
 extern "C" {
 #endif
 
-/* Samples a frame takes at 8 kHz: 192 symbols x 10/3 */
-#define NXDN_LINK_FRAME_SAMPLES 640u
-/* The transmit ring: two frames and a half (200 ms) */
-#define NXDN_LINK_RING 2048u
-/* Below this many queued samples (40 ms) a missing voice slot is sent as silence
- * rather than letting the ring run dry: an empty ring is a gap on air */
-#define NXDN_LINK_LOW_WATER 320u
+/* The transmit ring: 64 ms. The modulator runs symbol by symbol into it as it
+ * drains, so it holds only what the radio task's jitter needs (a power of two:
+ * the indices run free) */
+#define NXDN_LINK_RING 512u
+/* A frame is built once its four voice slots are in. If the vocoder is late and
+ * fewer than this many samples (20 ms) are queued, the frame goes with silence
+ * slots ahead of the voice it has, rather than letting the ring run dry (an
+ * empty ring is a gap on air): the latency grows once, the voice stays whole */
+#define NXDN_LINK_LOW_WATER 160u
 
 /* The radio's audio path, as measured on it (0 = flat) */
 typedef struct {
@@ -45,10 +47,14 @@ typedef struct {
     /* transmit: the task fills ring[head], the interrupt reads ring[tail] */
     nxdn_tx tx;
     nxdn_mod mod;
+    uint8_t pend[NXDN_FRAME_SYMBOLS];   /* the dibits being modulated: the preamble, a frame, or the tail */
+    uint8_t pos, len;
+    uint8_t stage[4][9];       /* voice slots taken from the source for the next frame */
+    uint8_t staged;
     int16_t ring[NXDN_LINK_RING];
     volatile uint16_t head, tail;   /* free running */
     uint8_t state;
-    bool flushed;
+    bool tail_queued, flushed;
     /* counters */
     uint32_t rx_samples, tx_samples, tx_frames, tx_silence_slots, underruns;
 } nxdn_link;

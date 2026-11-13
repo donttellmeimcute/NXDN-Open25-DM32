@@ -126,7 +126,28 @@ int main(void)
     fprintf(stderr, "de-emphasized: heard %u uncompensated, %u compensated\n", plain, n_heard);
     assert(plain < 40 && n_heard >= 40 && !memcmp(heard, sent, 40 * 9));
 
+    /* No squelch edge on the radio: the link finds a call after noise without being told (here 300 ms of
+     * discriminator noise, and a 200 Hz carrier offset) */
+    transmit(&tx, 40, 0);
+    static int16_t noisy[MAX_SAMPLES];
+    size_t lead = 2400, m = 0;
+    for (; m < lead; m++) noisy[m] = (int16_t)((int32_t)(next_rnd() % 40001u) - 20000);
+    for (size_t i = 0; i < n_air && m < MAX_SAMPLES; i++) noisy[m++] = (int16_t)(air[i] + 200 * 8);
+    unsigned from_header = 0;
+    for (unsigned trial = 0; trial < 20; trial++) {
+        /* a different phase of the noise each time: where the hunt's acquisitions fall against the preamble */
+        size_t skip = trial * 37;
+        nxdn_link_init(&rx, &flat, 7, 55, 9, sink, NULL);
+        n_heard = 0;
+        for (size_t i = skip; i < m; i += 256) nxdn_link_rx_audio(&rx, noisy + i, m - i < 256 ? m - i : 256);
+        /* every call is heard; one that misses its header joins at its SACCH (late entry), in order */
+        assert(rx.rx.calls == 1 && n_heard >= 28 && n_heard <= 40 && !memcmp(heard, sent[40 - n_heard], n_heard * 9));
+        from_header += !rx.rx.late_entries && n_heard >= 40;
+    }
+    fprintf(stderr, "after noise: %u of 20 calls joined at their header\n", from_header);
+    assert(from_header >= 18);   /* docs/nxdn-modem.md: about 1 call in 15 after strong noise misses it */
+
     printf("PASS NXDN link: TX ring on time with the vocoder's pace, late vocoder padded without gaps, abort, RX in "
-           "RX RAM halves, receive path compensation\n");
+           "RX RAM halves, receive path compensation, a call found after noise\n");
     return 0;
 }

@@ -18,6 +18,7 @@
  * tools/gen_nxdn_tables.py. No allocation, no RTOS, no hardware. */
 #ifndef NXDN_MODEM_H
 #define NXDN_MODEM_H
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -82,6 +83,9 @@ typedef struct {
     int32_t dc, outer, amp;  /* level tracking: offset, outer level (3 units), threshold (2 units) */
     uint32_t symbols;
     int32_t last_error;    /* Gardner error of the last symbol (diagnostic) */
+    int32_t fit;           /* mean distance of the symbols from their decided levels (signal or noise) */
+    bool onset_reacquire;  /* acquire again while the symbols don't fit (the caller sets it while it hunts for sync) */
+    uint32_t onsets;
     nxdn_hpf_inverse post; /* compensation of the receive audio path's high-pass */
     nxdn_deemph_inverse deemph;  /* ... and of its de-emphasis */
 } nxdn_demod;

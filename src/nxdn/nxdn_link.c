@@ -23,6 +23,9 @@ void nxdn_link_rx_audio(nxdn_link *l, const int16_t *pcm, size_t n)
         size_t chunk = n > 150 ? 150 : n;
         size_t nd = nxdn_demod_samples(&l->demod, pcm, chunk, dib, sizeof dib);
         for (size_t i = 0; i < nd; i++) nxdn_rx_push_dibit(&l->rx, dib[i]);
+        /* The radio's receive audio has no squelch edge to restart on: while the frame layer hunts,
+         * the demodulator acquires again at a carrier's onset (nxdn_demod.onset_reacquire) */
+        l->demod.onset_reacquire = l->rx.state == NXDN_RX_HUNT;
         pcm += chunk;
         n -= chunk;
         l->rx_samples += (uint32_t)chunk;
@@ -61,48 +64,68 @@ void nxdn_link_tx_begin(nxdn_link *l, const nxdn_tx_cfg *cfg)
     nxdn_hpf_inverse_init(&l->mod.pre, l->path.tx_hpf_hz, NXDN_TX_LEAK);
     nxdn_tx_begin(&l->tx, cfg, 1);
     __atomic_store_n(&l->tail, l->head, __ATOMIC_RELAXED);
-    l->flushed = false;
+    l->tail_queued = l->flushed = false;
+    l->staged = 0;
     l->state = NXDN_LINK_TX;
-    for (unsigned i = 0; i < NXDN_PREAMBLE_SYMBOLS; i++) symbol(l, nxdn_preamble_dibit(i, NXDN_PREAMBLE_SYMBOLS));
+    for (unsigned i = 0; i < NXDN_PREAMBLE_SYMBOLS; i++) l->pend[i] = nxdn_preamble_dibit(i, NXDN_PREAMBLE_SYMBOLS);
+    l->pos = 0;
+    l->len = NXDN_PREAMBLE_SYMBOLS;
 }
 
 void nxdn_link_tx_fill(nxdn_link *l, nxdn_slot_source next, void *ctx)
 {
     if (l->state == NXDN_LINK_IDLE || l->flushed) return;
     uint8_t f[NXDN_FRAME_BYTES];
-    while (space(l) >= NXDN_LINK_FRAME_SAMPLES + 8) {
-        int r = nxdn_tx_frame(&l->tx, f);
-        if (r > 0) {
-            for (unsigned i = 0; i < NXDN_FRAME_SYMBOLS; i++) symbol(l, (uint8_t)((f[i / 4] >> (6 - 2 * (i % 4))) & 3u));
-            l->tx_frames++;
+    while (space(l) >= 4) {
+        if (l->pos < l->len) {
+            symbol(l, l->pend[l->pos++]);
             continue;
         }
-        if (r < 0) {
-            /* the release frame is out: the tail, then what the modulator still holds */
-            for (unsigned i = 0; i < TAIL_SYMBOLS; i++) symbol(l, i & 1 ? 3 : 1);
+        if (l->tail_queued) {
+            /* the tail is out: what the modulator still holds, and the transmission is over */
             int16_t out[16];
+            if (space(l) < 16) return;
             put_samples(l, out, nxdn_mod_flush(&l->mod, out));
             l->flushed = true;
             l->state = NXDN_LINK_TX_DRAIN;
             return;
         }
-        /* the frame waits for voice */
-        uint8_t slot[9];
-        if (l->tx.state != NXDN_TX_ENDING && next && next(ctx, slot)) {
-            nxdn_tx_voice(&l->tx, slot);
-        } else if (nxdn_link_queued(l) < NXDN_LINK_LOW_WATER) {
-            /* the encoder is late (or PTT was released): silence keeps the air frames on time */
+        int r = nxdn_tx_frame(&l->tx, f);
+        if (r > 0) {
+            for (unsigned i = 0; i < NXDN_FRAME_SYMBOLS; i++) l->pend[i] = (uint8_t)((f[i / 4] >> (6 - 2 * (i % 4))) & 3u);
+            l->pos = 0;
+            l->len = NXDN_FRAME_SYMBOLS;
+            l->tx_frames++;
+            continue;
+        }
+        if (r < 0) {
+            /* the release frame is out: dotting while the PA drops */
+            for (unsigned i = 0; i < TAIL_SYMBOLS; i++) l->pend[i] = i & 1 ? 3 : 1;
+            l->pos = 0;
+            l->len = TAIL_SYMBOLS;
+            l->tail_queued = true;
+            continue;
+        }
+        /* the next frame waits for its four voice slots */
+        while (l->staged < 4 && next && next(ctx, l->stage[l->staged])) l->staged++;
+        if (l->staged < 4 && nxdn_link_queued(l) >= NXDN_LINK_LOW_WATER) return;
+        /* late vocoder: silence first, then the voice there is, so a talk spurt is never cut */
+        for (unsigned k = l->staged; k < 4; k++) {
             nxdn_tx_voice(&l->tx, nxdn_silence_slot);
             l->tx_silence_slots++;
-        } else {
-            return;
         }
+        for (unsigned k = 0; k < l->staged; k++) nxdn_tx_voice(&l->tx, l->stage[k]);
+        l->staged = 0;
     }
 }
 
 void nxdn_link_tx_end(nxdn_link *l)
 {
-    if (l->state == NXDN_LINK_TX) nxdn_tx_end(&l->tx);
+    if (l->state != NXDN_LINK_TX || l->tx.state >= NXDN_TX_ENDING) return;
+    /* the voice already taken goes out; the call layer pads its frame */
+    for (unsigned k = 0; k < l->staged; k++) nxdn_tx_voice(&l->tx, l->stage[k]);
+    l->staged = 0;
+    nxdn_tx_end(&l->tx);
 }
 
 bool nxdn_link_tx_done(const nxdn_link *l)

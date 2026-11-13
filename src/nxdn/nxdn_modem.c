@@ -102,7 +102,7 @@ size_t nxdn_mod_flush(nxdn_mod *m, int16_t out[16])
  * offset from the mean of the last four symbols and the timing with a fast
  * loop; after them the loops slow down, since on data Gardner's self-noise
  * jitters a fast loop (docs/nxdn-modem.md). */
-enum { AMP_MIN = 64, ACQ_SYMBOLS = 32, TIMING_ACQ_SHIFT = 4, TIMING_TRACK_SHIFT = 8 };
+enum { AMP_MIN = 64, ACQ_SYMBOLS = 32, TIMING_ACQ_SHIFT = 4, TIMING_TRACK_SHIFT = 8, ONSET_GUARD = ACQ_SYMBOLS };
 
 void nxdn_demod_init(nxdn_demod *d)
 {
@@ -153,12 +153,13 @@ size_t nxdn_demod_samples(nxdn_demod *d, const int16_t *in, size_t n, uint8_t *d
             int32_t on = mf(d, d->t_on);
             int32_t mid = mf(d, d->t_on - SPS_Q16 / 2);
             /* Levels. The fourth symbol seeds the offset and the outer level (+-3 units) from the
-             * first four (a preamble's: outer symbols, zero mean). While acquiring, the offset
+             * first four: their mean, and their mean distance from it. While acquiring, the offset
              * follows the mean of the last four symbols, which a wrong early decision can't run
-             * away with; then it is decision directed: it moves by the symbol's distance from
-             * its ideal level. The outer level follows the outer symbols' magnitude and the
-             * threshold sits at 2/3 of it (while acquiring every symbol counts: a preamble
-             * is all outer symbols). Fast while acquiring, then slow. */
+             * away with, and the outer level the magnitude of the symbols above half of it: all of
+             * a preamble's, and on data the outer ones once it has risen past the inner level.
+             * Then both are decision directed: the offset moves by the symbol's distance from its
+             * ideal level, the outer level follows the outer symbols' magnitude. The threshold
+             * between the inner and outer levels sits at 2/3 of it. */
             static const int8_t lv[4] = { 1, 3, -1, -3 };
             unsigned shift = d->symbols < ACQ_SYMBOLS ? 3 : d->symbols < 400 ? 5 : 6;
             d->last4[d->symbols & 3u] = on;
@@ -171,13 +172,32 @@ size_t nxdn_demod_samples(nxdn_demod *d, const int16_t *in, size_t n, uint8_t *d
             }
             int32_t dev = on - d->dc, mag = dev < 0 ? -dev : dev;
             d->amp = d->outer * 2 / 3;
-            uint8_t s = slice(d, on);
-            dibits[w++] = s;
+            uint8_t sym = slice(d, on);
+            dibits[w++] = sym;
+            int32_t miss = on - (d->dc + lv[sym] * d->outer / 3);
             if (d->symbols >= 4) {
-                if (d->symbols < ACQ_SYMBOLS) d->dc += (mean4 - d->dc) >> shift;
-                else d->dc += (on - (d->dc + lv[s] * d->outer / 3)) >> shift;
-                /* a preamble is all outer symbols: while acquiring every symbol counts */
-                if (d->symbols < ACQ_SYMBOLS || s == 1 || s == 3) d->outer += (mag - d->outer) >> shift;
+                if (d->symbols < ACQ_SYMBOLS) {
+                    d->dc += (mean4 - d->dc) >> shift;
+                    if (mag * 2 > d->outer) d->outer += (mag - d->outer) >> shift;
+                } else {
+                    d->dc += miss >> shift;
+                    if (sym == 1 || sym == 3) d->outer += (mag - d->outer) >> shift;
+                }
+            }
+            /* How well the symbols sit on their levels: the mean distance from the decided level.
+             * A signal sits close (a few percent of the outer level at a usable C/N); noise
+             * spreads evenly between the levels, a sixth of the outer level on average */
+            d->fit += ((miss < 0 ? -miss : miss) - d->fit) >> 3;
+            /* The radio's receive audio has no squelch edge. While the caller hunts for sync (on
+             * noise, or before a carrier) and, after an acquisition, the symbols still don't sit
+             * on their levels (the mean distance over 1/7 of the outer level: noise 1/6, a signal
+             * at 6 dB C/N 1/9), the levels and timing are acquired again. A transmission that
+             * starts is met by an acquisition within 32 symbols, inside its preamble
+             * (docs/nxdn-modem.md, joining a call) */
+            if (d->onset_reacquire && d->symbols >= ONSET_GUARD && d->fit * 7 > d->outer) {
+                d->symbols = 0;
+                d->fit = 0;
+                d->onsets++;
             }
             /* Gardner, (y_k - y_k-1) * y_k-1/2 normalized by the level squared, on the symbol
              * pairs that cross the offset only. Between two symbols of the same sign the
