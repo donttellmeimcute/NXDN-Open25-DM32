@@ -10,7 +10,12 @@
  * synthesizer settles after a retune or a transmission, with a key-up delay
  * before its first symbol. Its receivers are the ones the radio runs:
  * p25t_rx on the control channel, the P25 framer and frame decoder on a
- * voice channel. */
+ * voice channel. On a Phase 2 channel (a site with TDMA voice channels) it
+ * runs src/p25p2's receiver on its slot and sends its inbound bursts in its
+ * slot's positions of the superframe it receives, deaf during each; the
+ * radio itself has no Phase 2 physical layer (docs/p25-phase2.md), so this
+ * covers everything above it. */
+#include "p2_call.h"
 #include "site.h"
 #include "su.h"
 #include <assert.h>
@@ -39,11 +44,19 @@ typedef struct {
     unsigned voice_seq;
     p25_call call;
     unsigned deaf;
+    /* Phase 2 */
+    bool tdma;
+    uint8_t slot;
+    p2_rx p2;
+    p2_tx p2tx;
+    bool p2_talking, p2_sending;
+    uint8_t p2_burst[P2_BURST_DIBITS];
+    unsigned p2_pos, p2_bursts_sent;
+    uint32_t next_vcw_ms;
     /* heard */
     uint16_t heard_group;
     uint32_t heard_source;
     unsigned voice_frames, voice_ends, isp_frames, tunes;
-    bool keyed_without_reason;
 } radio;
 
 static site S;
@@ -86,6 +99,9 @@ static void voice_frame(radio *r)
     r->tx_pos = 0;
 }
 
+static void on_p2_mac(void *ctx, uint8_t slot, const p2_mac *m);
+static void on_p2_voice(void *ctx, uint8_t slot, const uint8_t vcw[P2_VCW_BYTES], bool encrypted);
+
 static void apply(radio *r, const p25t_su_out *o)
 {
     if (o->tune) {
@@ -94,6 +110,11 @@ static void apply(radio *r, const p25t_su_out *o)
         p25_rx_init(&r->vrx, r->su.cfg.nac, 2);
         r->deaf = SETTLE_SYMBOLS;
         r->tunes++;
+        r->tdma = o->tdma;
+        r->slot = o->slot;
+        r->p2_talking = r->p2_sending = false;
+        if (o->tdma)
+            p2_rx_init(&r->p2, o->slot, r->su.cfg.wacn, r->su.cfg.sysid, r->su.cc_nac, on_p2_mac, on_p2_voice, r);
     }
     if (o->send_isp) {
         /* the unit asks for every transmission: the harness checks it has a reason to */
@@ -108,7 +129,14 @@ static void apply(radio *r, const p25t_su_out *o)
         r->keyup = KEYUP_SYMBOLS;
         r->isp_frames++;
     }
-    if (o->voice_tx_start) {
+    if (o->voice_tx_start && o->tdma) {
+        assert(r->su.cfg.tx_enabled && r->su.cfg.tdma_tx && r->su.ptt && o->voice_source == r->su.cfg.unit_id);
+        p2_tx_init(&r->p2tx, r->su.cc_nac);
+        p2_tx_begin(&r->p2tx, o->voice_group, o->voice_source);
+        r->p2_talking = true;
+        r->tx_hz = o->tx_hz;
+        r->next_vcw_ms = r->ms;
+    } else if (o->voice_tx_start) {
         assert(r->su.cfg.tx_enabled && r->su.ptt && o->voice_source == r->su.cfg.unit_id);
         r->call = (p25_call){ .nac = r->su.cc_nac, .talkgroup = o->voice_group, .source_id = o->voice_source,
                               .status_symbol = 2 };
@@ -119,7 +147,43 @@ static void apply(radio *r, const p25t_su_out *o)
         r->keyup = KEYUP_SYMBOLS;
         voice_frame(r);
     }
-    if (o->voice_tx_stop) r->voice_stop = true;
+    if (o->voice_tx_stop) {
+        r->voice_stop = true;
+        if (r->p2_talking) p2_tx_end(&r->p2tx);
+    }
+}
+
+static void on_p2_mac(void *ctx, uint8_t slot, const p2_mac *m)
+{
+    radio *r = ctx;
+    (void)slot;
+    p25t_su_out o;
+    if (m->opcode == P2_MAC_PTT) {
+        r->heard_source = m->source;
+        r->heard_group = m->group;
+        p25t_su_voice(&r->su, m->group, m->source, m->algid != P2_ALGID_CLEAR, false, &o);
+    } else if (m->user) {
+        r->heard_source = m->user_source;
+        r->heard_group = m->user_group;
+        p25t_su_voice(&r->su, m->user_group, m->user_source, (m->svc & P2_SVC_ENCRYPTED) != 0, false, &o);
+    } else if (m->opcode == P2_MAC_END_PTT) {
+        r->voice_ends++;
+        p25t_su_voice(&r->su, m->group, 0, false, true, &o);
+    } else {
+        return;
+    }
+    apply(r, &o);
+}
+
+static void on_p2_voice(void *ctx, uint8_t slot, const uint8_t vcw[P2_VCW_BYTES], bool encrypted)
+{
+    radio *r = ctx;
+    (void)slot;
+    (void)vcw;
+    r->voice_frames++;
+    p25t_su_out o;
+    p25t_su_voice(&r->su, 0, 0, encrypted, false, &o);
+    apply(r, &o);
 }
 
 static void on_tsbk(void *ctx, uint16_t nac, const uint8_t t[P25T_TSBK_BYTES])
@@ -144,7 +208,7 @@ static void radio_init(radio *r, uint32_t unit, bool tx, uint32_t seed)
     memset(r, 0, sizeof *r);
     r->rnd = seed;
     p25t_su_cfg c = { .wacn = WACN, .sysid = SYSID, .unit_id = unit, .nac = NAC, .cc_hz = { WRONG_CC_HZ, S.cc_down_hz },
-                      .cc_count = 2, .talkgroup = GROUP, .tx_enabled = tx };
+                      .cc_count = 2, .talkgroup = GROUP, .tx_enabled = tx, .tdma_rx = true, .tdma_tx = true };
     p25t_rx_init(&r->cc, P25_NAC_ANY, on_tsbk, NULL, on_status, r);
     p25_rx_init(&r->vrx, NAC, 2);
     p25t_su_out o;
@@ -154,7 +218,38 @@ static void radio_init(radio *r, uint32_t unit, bool tx, uint32_t seed)
 
 static bool transmitting(const radio *r)
 {
-    return r->keyup || r->tx_pos < r->tx_len || r->voice_tx;
+    return r->keyup || r->tx_pos < r->tx_len || r->voice_tx || r->p2_talking || r->p2_sending;
+}
+
+/* One Phase 2 symbol time: send our inbound burst's symbol (deaf meanwhile) or receive; at each burst boundary of
+ * the superframe received, start our next inbound burst when the next burst is our slot's */
+static void radio_tdma_symbol(radio *r)
+{
+    uint8_t heard = (uint8_t)(rrnd(r) & 3u);
+    if (r->p2_sending) {
+        site_tx(&S, r->tx_hz, r->p2_burst[r->p2_pos++]);
+        if (r->p2_pos == P2_BURST_DIBITS) r->p2_sending = false;
+    } else {
+        bool fresh;
+        int d = site_rx(&S, r->rx_hz, &fresh);
+        if (d >= 0 && !r->deaf) heard = (uint8_t)d;
+        if (r->deaf) r->deaf--;
+    }
+    p2_rx_dibit(&r->p2, heard);
+    if (!r->p2_talking || !r->p2.locked || !r->p2.known || r->p2.pos != 0) return;
+    unsigned next = (r->p2.burst + 1u) % P2_SUPERFRAME_BURSTS;
+    if (p2_burst_channel(next) != r->slot) return;
+    if (r->p2tx.state == P2_TX_HANG || r->p2tx.state == P2_TX_IDLE) {
+        r->p2_talking = false;   /* MAC_END_PTT went out: the unit is done; the site keeps the hang time */
+        return;
+    }
+    uint8_t payload[P2_PAYLOAD_DIBITS];
+    uint8_t duid = p2_tx_burst(&r->p2tx, next, payload);
+    /* no ISCH inbound: those 20 symbols stand for the inbound burst's own framing (guard, ramp, sync) */
+    p2_burst_build(0, duid, payload, r->p2.mask, next, r->p2_burst);
+    r->p2_sending = true;
+    r->p2_pos = 0;
+    r->p2_bursts_sent++;
 }
 
 static void radio_symbol(radio *r)
@@ -211,8 +306,17 @@ static void step(void)
             p25t_su_out o;
             p25t_su_tick(&r->su, ms, &o);
             apply(r, &o);
+            /* the microphone: a 20 ms frame at a time while the Phase 2 call is up */
+            while (r->p2_talking && !r->p2tx.ending && (int32_t)(ms - r->next_vcw_ms) >= 0) {
+                p2_tx_voice(&r->p2tx, p2_silence_vcw);
+                r->next_vcw_ms += 20;
+            }
         }
-        if (S.tick % SITE_FDMA_TICKS == 0) radio_symbol(r);
+        if (r->tdma) {
+            if (S.tick % SITE_TDMA_TICKS == 0) radio_tdma_symbol(r);
+        } else if (S.tick % SITE_FDMA_TICKS == 0) {
+            radio_symbol(r);
+        }
     }
     site_end(&S);
 }
@@ -551,6 +655,55 @@ static void lost_and_leave(void)
     check_isps_are_ours();
 }
 
+static void tdma_calls(void)
+{
+    site_cfg c = base_cfg();
+    c.tdma = true;
+    world(&c, 3, true);
+    radio *a = &R[0], *b = &R[1], *old = &R[2];
+    old->su.cfg.tdma_rx = old->su.cfg.tdma_tx = false;   /* a radio like this one: no Phase 2 */
+    RUN_UNTIL(a->su.affiliated && b->su.affiliated && old->su.affiliated, 20000);
+    run_ms(500);
+    /* a talker's call on a TDMA slot: followed by the units that can, not by the one that cannot */
+    assert(site_talk(&S, GROUP, 5555, 2000));
+    uint32_t t = RUN_UNTIL(a->su.state == P25T_SU_VOICE_RX && b->su.state == P25T_SU_VOICE_RX, 500);
+    assert(a->su.call_tdma && a->su.call_slot == 0 && a->tdma);
+    RUN_UNTIL(a->heard_source == 5555 && b->heard_source == 5555, 1500);
+    RUN_UNTIL(a->voice_ends >= 1, 3000);
+    RUN_UNTIL(a->su.state == P25T_SU_CC && b->su.state == P25T_SU_CC, 3000);
+    assert(old->su.state == P25T_SU_CC && old->su.grants_followed == 0);
+    fprintf(stderr, "TDMA: followed a grant to slot 0 in %u ms, %u voice frames heard, MAC_END_PTT heard\n", t,
+            a->voice_frames);
+    run_ms(1000);
+    /* a group call on PTT, granted on a TDMA slot: inbound bursts in the slot, repeated, heard by the other unit */
+    unsigned heard_before = b->voice_frames;
+    ptt(a, true);
+    uint32_t g = RUN_UNTIL(a->su.state == P25T_SU_VOICE_TX, 2000);
+    assert(a->su.call_tdma);
+    RUN_UNTIL(b->su.state == P25T_SU_VOICE_RX && b->heard_source == 1001, 1500);
+    run_ms(1500);
+    ptt(a, false);
+    RUN_UNTIL(!a->p2_talking && !a->p2_sending, 1000);
+    RUN_UNTIL(b->voice_ends >= 2, 1500);
+    RUN_UNTIL(a->su.state == P25T_SU_CC && b->su.state == P25T_SU_CC, 4000);
+    const site_call_log *call = &S.calls[S.n_calls - 1];
+    assert(call->unit && call->source == 1001 && call->lc_source == 1001 && call->lc_group == GROUP);
+    /* MAC_PTT and MAC_END_PTT twice on the FACCH, once more when a SACCH position falls in them */
+    assert(call->mac_ptts >= 2 && call->mac_ends >= 2 && call->vcws >= 70 && S.t[0].in.mac_bad == 0);
+    assert(b->voice_frames - heard_before >= 70);
+    fprintf(stderr, "TDMA group call: granted %u ms after PTT; %u inbound bursts; site heard MAC_PTT x%u, %u voice "
+                    "frames, MAC_END_PTT x%u from unit 1001; unit 1002 heard %u frames\n", g, a->p2_bursts_sent,
+            call->mac_ptts, call->vcws, call->mac_ends, b->voice_frames - heard_before);
+    /* the radio without a Phase 2 transmitter is granted a TDMA slot: it refuses, never transmits voice */
+    unsigned calls = S.n_calls;
+    ptt(old, true);
+    RUN_UNTIL(old->su.deny != P25T_SU_DENY_NONE, 2000);
+    assert(old->su.deny == P25T_SU_DENY_BAND && old->su.state == P25T_SU_CC && !old->voice_tx && !old->p2_talking);
+    ptt(old, false);
+    assert(S.n_calls == calls + 1 && S.calls[calls].mac_ptts == 0 && S.calls[calls].vcws == 0);
+    check_isps_are_ours();
+}
+
 int main(void)
 {
     registered_and_affiliated();
@@ -561,6 +714,7 @@ int main(void)
     refused_and_other_systems();
     contention();
     lost_and_leave();
+    tdma_calls();
     fprintf(stderr, "test_su: ok\n");
     return 0;
 }

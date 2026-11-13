@@ -134,18 +134,20 @@ static void own_grant(p25t_su *su, uint16_t channel, p25t_su_out *out)
         set_state(su, P25T_SU_CC);   /* released while waiting: nothing to send */
         return;
     }
-    if (!p25t_channel_freq(su->bands, channel, &rx, &tx, &slot, &tdma) || !tx || tdma) {
-        /* no transmit frequency, or a Phase 2 channel (no Phase 2 transmitter on this radio) */
+    if (!p25t_channel_freq(su->bands, channel, &rx, &tx, &slot, &tdma) || !tx || (tdma && !su->cfg.tdma_tx)) {
+        /* no transmit frequency, or a Phase 2 channel and no Phase 2 transmitter */
         deny(su, P25T_SU_DENY_BAND, 0, out);
         return;
     }
     su->call_group = su->cfg.talkgroup;
     su->call_source = su->cfg.unit_id;
     su->call_rx_hz = rx;
-    su->call_slot = 0;
-    su->call_tdma = false;
+    su->call_slot = slot;
+    su->call_tdma = tdma;
     out->tune = true;
     out->rx_hz = rx;
+    out->slot = slot;
+    out->tdma = tdma;
     out->voice_tx_start = true;
     out->tx_hz = tx;
     out->voice_group = su->cfg.talkgroup;

@@ -5,8 +5,13 @@
  * acknowledge), and voice channels that carry calls from simulated talkers
  * or repeat the calls units make on their inbound frequencies.
  *
+ * With cfg.tdma the voice channels are Phase 2 timeslots (src/p25p2): two a
+ * carrier, outbound bursts from each slot's p2_tx, inbound bursts read at the
+ * slot's positions of the site's own superframe timing, and a unit's voice
+ * repeated outbound.
+ *
  * Time is a 24 kHz tick: Phase 1 carriers (control channel, FDMA voice) move
- * one symbol every SITE_FDMA_TICKS. Each tick: site_begin(), then every
+ * one symbol every SITE_FDMA_TICKS, Phase 2 carriers every SITE_TDMA_TICKS. Each tick: site_begin(), then every
  * radio reads the carrier it is tuned to (site_rx) and puts its symbol on
  * the frequency it transmits on (site_tx), then site_end(). Two radios on
  * one inbound frequency in the same symbol collide: the site hears noise.
@@ -17,6 +22,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "p25.h"
+#include "p2_call.h"
 #include "tmsg.h"
 
 enum {
@@ -24,12 +30,13 @@ enum {
     SITE_FDMA_TICKS = 5,            /* 4800 symbols/s */
     SITE_TDMA_TICKS = 4,            /* 6000 symbols/s */
     SITE_UNITS = 8,
-    SITE_VOICE = 3,                 /* voice channels */
+    SITE_VOICE = 3,                 /* voice channels (with cfg.tdma: timeslots) */
+    SITE_TDMA_CARRIERS = 2,
     SITE_QUEUE = 32,                /* outbound packets waiting for a TSDU */
     SITE_LOG = 128,
     SITE_CC_CHANNEL = 0x1000,       /* band 1, channel 0 */
     SITE_FDMA_FIRST = 0x100A,       /* voice channels: band 1, channels 10.. */
-    SITE_TDMA_FIRST = 0x2014,       /* band 2 (two slots a carrier), carriers 10.. */
+    SITE_TDMA_FIRST = 0x2014,       /* band 2 (two slots a carrier): carrier 10 slots 0 and 1, carrier 11 slot 0 */
     SITE_PROCESS_MS = 20,           /* the site's delay before an answer is ready */
     SITE_SYNC_SYMBOLS = 24,         /* an inbound carrier this long marks the inbound channel busy */
 };
@@ -68,9 +75,10 @@ typedef struct {
     uint16_t channel;
     bool unit;                      /* a unit's call (granted on request), else a talker's */
     uint32_t hdus, ldu1s, ldu2s, tdus;   /* frames heard on the inbound frequency (unit calls) */
-    uint32_t lc_source;             /* the source and group in the unit's LDU1 link control */
+    uint32_t lc_source;             /* the source and group in the unit's LDU1 link control (TDMA: MAC_PTT) */
     uint16_t lc_group;
     uint32_t sent;                  /* frames sent on the outbound frequency */
+    uint32_t mac_ptts, vcws, mac_ends;   /* TDMA: what the unit's inbound bursts carried */
 } site_call_log;
 
 typedef struct {
@@ -94,9 +102,29 @@ typedef struct {
     /* inbound */
     p25_rx up;
     uint8_t up_count, up_dibit;
+    /* TDMA: the carrier and the voice put out (talkers' frames) */
+    uint8_t carrier;
+    uint32_t next_frame_tick;
 } site_voice;
 
+struct site;
 typedef struct {
+    struct site *owner;
+    uint8_t index;
+    uint32_t down_hz, up_hz;
+    p2_tx ch[2];
+    unsigned superframe, burst, pos;
+    unsigned cur_burst, cur_pos;     /* where the symbol on the air this tick is */
+    uint8_t out[P2_BURST_DIBITS];
+    int sym;
+    /* inbound: the burst window's dibits, by the site's timing */
+    p2_rx in;
+    uint8_t in_buf[P2_BURST_DIBITS];
+    uint8_t up_count, up_dibit;
+    unsigned in_symbols;
+} site_tdma;
+
+typedef struct site {
     site_cfg cfg;
     uint32_t tick, rnd;
     p25t_iden bands[16];
@@ -118,6 +146,8 @@ typedef struct {
     uint32_t registered[SITE_UNITS];
     uint16_t affiliated[SITE_UNITS];   /* group, by registered[] index */
     site_voice v[SITE_VOICE];
+    site_tdma t[SITE_TDMA_CARRIERS];
+    uint8_t mask[P2_MASK_BYTES];
     /* what happened */
     site_isp_log isps[SITE_LOG];
     unsigned n_isps, collisions;

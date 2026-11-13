@@ -101,6 +101,11 @@ static bool start_call(site *s, uint16_t group, uint32_t source, bool unit, uint
     v->rq_head = v->rq_count = 0;
     v->sym = -1;
     p25_rx_init(&v->up, s->cfg.nac, 2);
+    if (tdma) {
+        v->carrier = (uint8_t)(v - s->v) / 2;
+        v->next_frame_tick = s->tick + ms_ticks(SITE_PROCESS_MS + 2 * GRANT_GAP_MS);
+        if (!unit) p2_tx_begin(&s->t[v->carrier].ch[slot], group, source);
+    }
     v->log = s->n_calls++;
     site_call_log *c = &s->calls[v->log];
     memset(c, 0, sizeof *c);
@@ -218,6 +223,118 @@ static void voice_up(site *s, site_voice *v)
         }
         if (v->up.nid.duid == P25_DUID_TDU || v->up.nid.duid == P25_DUID_TDULC)
             v->end_tick = s->tick;   /* the call ends once the terminator is repeated */
+    }
+}
+
+/* ---- TDMA voice channels ---- */
+
+static site_voice *slot_voice(site *s, unsigned carrier, unsigned slot)
+{
+    for (int i = 0; i < SITE_VOICE; i++)
+        if (s->v[i].tdma && s->v[i].carrier == carrier && s->v[i].slot == slot) return &s->v[i];
+    return NULL;
+}
+
+/* A unit's inbound bursts, decoded at their positions in the site's timing: logged, and repeated outbound */
+static void on_in_mac(void *ctx, uint8_t slot, const p2_mac *m)
+{
+    site_tdma *t = ctx;
+    site *s = t->owner;
+    site_voice *v = slot_voice(s, t->index, slot);
+    if (!v || v->state != V_UNIT) return;
+    site_call_log *c = &s->calls[v->log];
+    v->last_up_tick = s->tick;
+    if (m->opcode == P2_MAC_PTT) {
+        c->mac_ptts++;
+        c->lc_source = m->source;
+        c->lc_group = m->group;
+        if (t->ch[slot].state == P2_TX_IDLE) p2_tx_begin(&t->ch[slot], m->group, m->source);
+    } else if (m->opcode == P2_MAC_END_PTT) {
+        c->mac_ends++;
+        p2_tx_end(&t->ch[slot]);
+        v->end_tick = s->tick;
+    }
+}
+
+static void on_in_voice(void *ctx, uint8_t slot, const uint8_t vcw[P2_VCW_BYTES], bool encrypted)
+{
+    site_tdma *t = ctx;
+    site *s = t->owner;
+    (void)encrypted;
+    site_voice *v = slot_voice(s, t->index, slot);
+    if (!v || v->state != V_UNIT) return;
+    s->calls[v->log].vcws++;
+    v->last_up_tick = s->tick;
+    p2_tx_voice(&t->ch[slot], vcw);
+}
+
+static void tdma_calls(site *s, site_tdma *t)
+{
+    for (int i = 0; i < SITE_VOICE; i++) {
+        site_voice *v = &s->v[i];
+        if (!v->tdma || v->carrier != t->index) continue;
+        p2_tx *tx = &t->ch[v->slot];
+        switch (v->state) {
+        case V_TALKER:
+            /* the talker's 20 ms frames, then the end */
+            while (s->tick < v->end_tick && (int32_t)(s->tick - v->next_frame_tick) >= 0) {
+                if (p2_tx_voice(tx, p2_silence_vcw)) s->calls[v->log].sent++;
+                v->next_frame_tick += ms_ticks(20);
+            }
+            if (s->tick >= v->end_tick && !tx->ending) p2_tx_end(tx);
+            if (tx->ending && (tx->state == P2_TX_HANG || tx->state == P2_TX_IDLE)) {
+                v->state = V_HANG;
+                v->end_tick = s->tick + ms_ticks(HANG_MS);
+            }
+            break;
+        case V_UNIT:
+            if (s->tick - v->last_up_tick >= ms_ticks(UNIT_LATE_MS) && p2_tx_busy(tx)) p2_tx_end(tx);
+            if ((v->end_tick <= s->tick || s->tick - v->last_up_tick >= ms_ticks(UNIT_LATE_MS)) &&
+                (tx->state == P2_TX_HANG || tx->state == P2_TX_IDLE)) {
+                v->state = V_HANG;
+                v->end_tick = s->tick + ms_ticks(HANG_MS);
+            }
+            break;
+        case V_HANG:
+            if (s->tick >= v->end_tick && !p2_tx_busy(tx)) v->state = V_FREE;
+            break;
+        default:
+            break;
+        }
+    }
+}
+
+static void tdma_down(site *s, site_tdma *t)
+{
+    tdma_calls(s, t);
+    bool on = p2_tx_busy(&t->ch[0]) || p2_tx_busy(&t->ch[1]);
+    for (int i = 0; i < SITE_VOICE; i++) on |= s->v[i].tdma && s->v[i].carrier == t->index && s->v[i].state != V_FREE;
+    if (t->pos == 0) {
+        p2_tx *ch[2] = { &t->ch[0], &t->ch[1] };
+        p2_outbound_burst(ch, t->burst, t->superframe, s->mask, t->out);
+    }
+    t->cur_burst = t->burst;
+    t->cur_pos = t->pos;
+    t->sym = on ? t->out[t->pos] : -1;
+    if (++t->pos == P2_BURST_DIBITS) {
+        t->pos = 0;
+        if (++t->burst == P2_SUPERFRAME_BURSTS) {
+            t->burst = 0;
+            t->superframe++;
+        }
+    }
+}
+
+static void tdma_up(site *s, site_tdma *t)
+{
+    uint8_t d = t->up_count == 1 ? t->up_dibit : (uint8_t)(srnd(s) & 3u);
+    t->in_symbols += t->up_count > 0;
+    if (t->up_count > 1) s->collisions++;
+    t->up_count = 0;
+    t->in_buf[t->cur_pos] = d;
+    if (t->cur_pos == P2_BURST_DIBITS - 1) {
+        if (t->in_symbols > P2_BURST_DIBITS / 2) p2_rx_burst(&t->in, t->cur_burst, t->in_buf);
+        t->in_symbols = 0;
     }
 }
 
@@ -429,8 +546,22 @@ void site_init(site *s, const site_cfg *cfg)
                                .tx_offset_hz = SITE_TX_OFFSET_HZ, .tx_ok = true };
     p25t_channel_freq(s->bands, SITE_CC_CHANNEL, &s->cc_down_hz, &s->cc_up_hz, NULL, NULL);
     for (int i = 0; i < SITE_VOICE; i++) {
-        s->v[i].channel = (uint16_t)(cfg->tdma ? SITE_TDMA_FIRST + 2 * i : SITE_FDMA_FIRST + i);
+        s->v[i].channel = (uint16_t)(cfg->tdma ? SITE_TDMA_FIRST + i : SITE_FDMA_FIRST + i);
+        s->v[i].tdma = cfg->tdma;
+        s->v[i].carrier = (uint8_t)(i / 2);
+        s->v[i].slot = (uint8_t)(cfg->tdma ? i % 2 : 0);
         s->v[i].sym = -1;
+    }
+    p2_mask(cfg->wacn, cfg->sysid, cfg->nac, s->mask);
+    for (int c = 0; c < SITE_TDMA_CARRIERS; c++) {
+        site_tdma *t = &s->t[c];
+        t->owner = s;
+        t->index = (uint8_t)c;
+        p25t_channel_freq(s->bands, (uint16_t)(SITE_TDMA_FIRST + 2 * c), &t->down_hz, &t->up_hz, NULL, NULL);
+        p2_tx_init(&t->ch[0], cfg->nac);
+        p2_tx_init(&t->ch[1], cfg->nac);
+        p2_rx_init(&t->in, P2_RX_FOLLOW_BOTH, cfg->wacn, cfg->sysid, cfg->nac, on_in_mac, on_in_voice, t);
+        t->sym = -1;
     }
     p25t_rx_init(&s->cc_up, cfg->nac, on_isp, NULL, NULL, s);
     s->cc_pos = sizeof s->cc;
@@ -439,6 +570,8 @@ void site_init(site *s, const site_cfg *cfg)
 
 void site_begin(site *s)
 {
+    if (s->cfg.tdma && s->tick % SITE_TDMA_TICKS == 0)
+        for (int c = 0; c < SITE_TDMA_CARRIERS; c++) tdma_down(s, &s->t[c]);
     if (s->tick % SITE_FDMA_TICKS) return;
     for (int i = 0; i < SITE_UNITS; i++)
         if (s->later[i].active && (int32_t)(s->tick - s->later[i].tick) >= 0) {
@@ -465,6 +598,12 @@ void site_begin(site *s)
 
 int site_rx(const site *s, uint32_t hz, bool *fresh)
 {
+    if (s->cfg.tdma)
+        for (int c = 0; c < SITE_TDMA_CARRIERS; c++)
+            if (hz == s->t[c].down_hz) {
+                *fresh = s->tick % SITE_TDMA_TICKS == 0;
+                return s->t[c].sym;
+            }
     *fresh = s->tick % SITE_FDMA_TICKS == 0;
     if (hz == s->cc_down_hz) return s->cc_sym;
     for (int i = 0; i < SITE_VOICE; i++)
@@ -474,6 +613,13 @@ int site_rx(const site *s, uint32_t hz, bool *fresh)
 
 void site_tx(site *s, uint32_t hz, uint8_t dibit)
 {
+    if (s->cfg.tdma)
+        for (int c = 0; c < SITE_TDMA_CARRIERS; c++)
+            if (hz == s->t[c].up_hz) {
+                s->t[c].up_count++;
+                s->t[c].up_dibit = dibit;
+                return;
+            }
     if (hz == s->cc_up_hz) {
         s->cc_up_count++;
         s->cc_up_dibit = dibit;
@@ -488,6 +634,8 @@ void site_tx(site *s, uint32_t hz, uint8_t dibit)
 
 void site_end(site *s)
 {
+    if (s->cfg.tdma && s->tick % SITE_TDMA_TICKS == 0)
+        for (int c = 0; c < SITE_TDMA_CARRIERS; c++) tdma_up(s, &s->t[c]);
     if (s->tick % SITE_FDMA_TICKS == 0) {
         bool carrier = s->cc_up_count > 0;
         if (s->cc_up_count > 1) s->collisions++;

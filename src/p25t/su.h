@@ -63,6 +63,7 @@ typedef struct {
     bool hear_all;                  /* follow every group grant */
     bool tx_enabled;                /* CONFIG_P25_TRUNK_TX and a configured system */
     bool tdma_rx;                   /* can follow Phase 2 TDMA voice channels */
+    bool tdma_tx;                   /* can talk on them (a Phase 2 transmitter; this radio has none) */
 } p25t_su_cfg;
 
 enum p25t_su_state {
@@ -84,7 +85,7 @@ typedef struct {
     uint8_t isp[P25T_TSBK_BYTES];
     uint16_t nac;
     uint32_t tx_hz;
-    bool voice_tx_start;            /* start the group call on tx_hz (FDMA) */
+    bool voice_tx_start;            /* start the group call on tx_hz (FDMA, or TDMA in slot) */
     bool voice_tx_stop;             /* end it (terminator) */
     uint16_t voice_group;
     uint32_t voice_source;          /* always cfg.unit_id */
