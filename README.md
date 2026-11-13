@@ -34,6 +34,7 @@ You can also help by reviewing the modem or P25 code, contributing reproducible 
 - [Build and test guide](docs/build.md)
 - [P25 conventional channels](docs/p25-channels.md)
 - [NXDN48 conventional channels](docs/nxdn-channels.md) and [the NXDN48 modem simulation](docs/nxdn-modem.md)
+- [P25 trunking](docs/p25-trunking.md) and [P25 Phase 2 (TDMA)](docs/p25-phase2.md)
 - [Independent validation](docs/validation.md)
 - [P25 framing, error correction, and synthetic test vectors](docs/protocol.md)
 - [Modem research and RF test criteria](docs/modem.md)

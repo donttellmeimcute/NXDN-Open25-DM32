@@ -1,5 +1,113 @@
 # DM-32 conventional P25 progress
 
+## 2026-11-13 Phase 3: P25 trunking (Phase 1 control channel, FDMA voice, Phase 2 above the PHY)
+
+**Control channel.** `src/p25t/tsbk.c`: TSBK CRC, the rate 1/2 trellis code with a full Viterbi decoder, the
+block interleaver, TSDUs of 1-3 blocks with NID and status symbols, and an incremental receiver that reports the
+inbound channel's idle/busy status. `src/p25t/tmsg.c`: the outbound and inbound messages a group-voice subscriber
+needs (grants, updates, registration, affiliation, ACK/queued/deny, RFSS and network status, identifier updates)
+and the band plan. Validated independently:
+- OP25's `tk_p25` parses 10 OSP types exactly as written.
+- dsd-fme decodes 18/18 TSDUs of a control channel stream with every value.
+
+**Subscriber logic.** `src/p25t/su.c` (no RTOS, time as input):
+- Hunting the configured system.
+- Registration and affiliation.
+- Following grants (talkgroup, priority list, hear-all) to FDMA or TDMA voice and back.
+- PTT requests with random access on idle inbound slots, retries, ACK, queue and deny.
+- Safeguards ([p25-trunking.md](docs/p25-trunking.md)): transmit only with a whole user-entered identity, only after
+  the control channel broadcasts the configured WACN and System ID, always with the configured unit ID, never
+  without PTT except registration and affiliation.
+
+The inbound access timing values are this implementation's (TIA-102.AABD not available) and are documented as
+provisional.
+
+**Phase 2.** The HR_C7000 offers no path to 6000 symbols/s H-DQPSK or H-CPM on an unmodified radio:
+- No sample access above 8 kHz.
+- No modulator bypass.
+- No symbol-rate register.
+- No raw symbol stream.
+
+[p25-phase2.md](docs/p25-phase2.md) has the register-level findings. Everything above the physical layer is
+in `src/p25p2`: ISCH, DUID, the WACN/System ID/NAC scrambling, RS(63,35) with erasures, CRC-12, SACCH and FACCH,
+ESS, 4V/2V, voice channel MAC PDUs, a slot sender and a stream receiver. Voice code words are DMR's AMBE+2 air
+frames exactly, so the radio's vocoder path takes them unchanged. Validated independently on a two-call voice
+channel stream:
+- dsd-fme: every MAC PDU and the ESS; 62/62 voice frames per slot bit-exact, 0 Golay corrections.
+- OP25's Python TDMA decoder: every ISCH and burst type; 62/62 voice code words per slot.
+
+**Site simulator.** `tests/p25t/site.c` provides:
+- A control channel that answers registration, affiliation, de-registration and voice requests (grant, ACK,
+  queue, deny), sets busy/idle status symbols, and sends grant updates.
+- FDMA voice channels that carry talkers or repeat units.
+- Phase 2 voice channels (two slots per carrier, inbound bursts decoded at the slot's positions and repeated).
+- Collisions between units.
+
+Units in `test_su` complete registration, affiliation and a group call in Phase 1 and in Phase 2, with these
+timings:
+
+| Measure | Result |
+|---|---|
+| Control channel found | 3.1 s, after the empty first frequency |
+| Registered | 0.28 s later |
+| Affiliated | 0.23 s after that |
+| FDMA grant followed | 75 ms |
+| PTT to FDMA grant | 250 ms |
+| TDMA grant followed | 100 ms |
+| PTT to TDMA grant | 218 ms (88 voice frames repeated to the other unit) |
+| 3 units contending | registered and affiliated in 5.3 s |
+
+**Radio.** A P25T channel runs `integration/radiofoundry/p25t/radio_p25t.c`:
+- The control channel decoder runs on a tap of the native P25 receive stream (P25 worker task) and passes events to
+  the radio task.
+- The subscriber logic runs in the radio task.
+- Calls are followed through the P25 channel path.
+- PTT on a grant uses the P25 transmit path on the voice channel's inbound frequency.
+- Inbound packets are short native transmissions (3 lead blocks, the TSDU, a tail block), counted apart from calls.
+- Phase 2 grants are not followed (no PHY).
+
+Patches:
+- `0007`: radio core (trunk mode, TX rules, no busy lockout).
+- `0008`: screen state (searching / listen only / not registered / requesting / queued; Spanish and Italian
+  translations).
+
+The codeplug, editor and CSV already carried the trunk mode, WACN and System ID (patch `0004`).
+
+**Switches.** `CONFIG_P25_TRUNK` (on), `CONFIG_P25_TRUNK_TX` (off by default; `--trunk-tx`), `CONFIG_P25_PHASE2`
+(on; nothing on the radio calls it, the linker drops it). Measured (native preset unless noted; RAM of 211,456):
+
+| Build | Flash | RAM | Free RAM |
+|---|---:|---:|---:|
+| trunk RX + Phase 2 (default) | 466,576 | 194,432 | 17,024 |
+| trunk RX + TX | 468,004 | 195,184 | 16,272 |
+| trunk RX, Phase 2 off | 466,588 | 194,432 | 17,024 |
+| trunk off | 459,588 | 193,176 | 18,280 |
+| trunk off, NXDN off | 445,784 | 190,432 | 21,024 |
+| lean | 464,824 | 192,016 | 19,440 |
+| lean + trunk TX | 466,268 | 192,768 | 18,688 |
+| P25 off | 409,064 | 163,352 | 48,104 |
+
+Trunking receive costs 6,988 bytes of flash and 1,256 of RAM; trunked transmit 1,428 and 752 more. Every
+configuration (trunk on/off, TX on/off, Phase 2 on/off, NXDN on/off, lean, lab, P25 off) builds with zero warnings.
+The stack check passes. The tap path adds about 0.5 KB in the P25 worker, below its deepest path. The radio task
+keeps 740 bytes free, and the least margin is unchanged (idle task, 136 bytes).
+
+Tests:
+- `tools/test_p25t.py`: `test_tsbk`, `test_p2`, `test_su`, and `test_radio_p25t` (the radio layer unchanged on host
+  stand-ins: registration through the tap, a followed call, a granted call heard by the site, a refusal).
+- `tests/test_p25t_validation.py`, `tests/test_p25p2_validation.py`.
+- The RadioFoundry host suite: `radioCoreTestP25T` 2,211 checks and `radioCoreTestP25TX` 2,218, with `P25` 2,204
+  and `NXDN` 2,172 unchanged; UI flows, layout check 4,667 screens, i18n.
+- NXDN, voice, native, first-boot and receive suites; 110 Python tests.
+
+**Not verified in hardware:** all of it. In particular:
+- TSDU decoding from the native receive stream.
+- Retune times between control and voice channels.
+- The inbound packet pipeline's latency against the system's access timing.
+- The PA ramp of the 90 ms lead.
+- Interoperation with a real P25 trunked system (authorized system or lab only).
+- Transmit never ran on the radio: no radio is connected, and `CONFIG_P25_TRUNK_TX` is off by default.
+
 ## 2026-11-13 Phase 2: NXDN48 conventional channels
 
 **Air interface and frame layer.** NXDN48 confirmed against MMDVM and MMDVMHost: 2400 symbols/s 4FSK at
