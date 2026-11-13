@@ -56,8 +56,51 @@ Two details of the comparison:
 - dsd-fme counts one "header error" when the first frame's NAC differs from its initial NAC 0. It is bookkeeping,
   not a bit error.
 
-## Receive side
+## P25 receive side
 
 The receive path below the modem is the HR_C7000's demodulator and DMR deframer (docs/modem.md). On the host, the
 receiver's framing is checked against frames built by OP25's `p25craft` (`tests/protocol`, `tests/test_voice.c`),
 and live captures from the radio were decoded by OP25 (PROGRESS.md, 2026-11-05).
+
+## NXDN48
+
+`tools/nxdn_validate.py` checks both directions against implementations that share no code with ours
+(`results/nxdn-validation.json`, 6 s calls, RAN 12, source 4001, group 200; 300 AMBE+2 frames each).
+
+**Transmit, decoded by dsd-fme.** `tests/validation/nxdn_tx_air.c` runs the firmware's chain on the host: AMBE+2
+parameters, the AMBE FEC, the call frames of `src/nxdn` and the 8 kHz modulator. dsd-fme (`-fi`) decodes the
+recording; its RAN, the VCALL (source, group) from the SACCH superframe, the TX_REL in FACCH1 and every AMBE+2 frame
+it recovers are compared with what we sent.
+
+| Waveform | Header VCALL (FACCH1) | AMBE+2 frames equal to ours | Corrections |
+|---|---|---:|---:|
+| Held symbol levels (bit-exact), three header frames | decoded | 300 / 300 | 0 |
+| Our modulator, one header frame (as the firmware) | not shown (below) | 292 / 300 (the first two frames: dsd-fme joining) | 0 |
+
+dsd-fme confirms its sync over two frame sync words and settles its levels over the next ones: it joins two or
+three frames into a transmission, so only a header with others before it can show. On shaped waveforms it misreads
+the header frames' LICH as a Japanese DCR code; MMDVM's shaping gets the same reading (checked), and with held
+levels the same frames decode as VCALL headers. MMDVMHost's classes read our header bit for bit
+(`tests/nxdn/test_nxdn_mmdvm.cc`).
+
+**Receive, from MMDVM's transmit shaping.** The same frames, as dibits, are shaped by MMDVM's NXDN transmit filters
+(RRC 0.2 and its sinc filter, coefficients read from `research/protocol/MMDVM/NXDNTX.cpp` at the pinned commit),
+carried through the FM channel model with 100 ms of idle noise first, and received by the firmware's chain
+(`tests/validation/nxdn_rx_air.c`: demodulator, call layer, AMBE FEC).
+
+| Channel | Call | AMBE+2 frames played equal to sent |
+|---|---|---:|
+| no noise | VCALL from the header, TX_REL | 300 / 300 |
+| 12 dB C/N | same | 300 / 300 |
+| 10 dB C/N | same | 299 / 300 |
+| 8 dB C/N | same | 287 / 300 |
+| 14 dB C/N, +500 Hz | same | 300 / 300 |
+
+```sh
+python3 tools/nxdn_validate.py --check
+python3 tools/nxdn_validate.py --cnr-db 10
+python3 -m unittest tests.test_nxdn_validation -v
+```
+
+The frame layer is also checked against MMDVMHost's classes, in both directions and under bit errors
+(`python3 tools/test_nxdn.py`, `docs/nxdn-modem.md`).
