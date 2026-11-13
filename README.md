@@ -31,6 +31,8 @@ You can also help by reviewing the modem or P25 code, contributing reproducible 
 
 ## Developer resources
 
+- [User guide: FM, DMR, P25, NXDN and P25 trunk channels](docs/user-guide.md)
+- [Resources of the multi-mode image](docs/resources.md) and [the hardware-in-the-loop checklist](docs/hil-checklist.md)
 - [Build and test guide](docs/build.md)
 - [P25 conventional channels](docs/p25-channels.md)
 - [NXDN48 conventional channels](docs/nxdn-channels.md) and [the NXDN48 modem simulation](docs/nxdn-modem.md)
